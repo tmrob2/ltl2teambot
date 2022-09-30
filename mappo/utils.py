@@ -4,6 +4,8 @@ from minigrid.wrappers import ObservationWrapper
 import operator
 from functools import reduce
 
+# todo test lstm layer with both the default image and the Flat Img Grid
+
 class FlatImageGrid(ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
