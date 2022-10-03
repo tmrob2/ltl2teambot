@@ -1,17 +1,20 @@
 # minigrid works with gym 0.26
 # rware does not support gym 0.26 so this is something to be aware of up front
 
-import os
+#import os
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+#os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-from utils import FlatImageGrid
+from mappo.utils import FlatImageGrid
 import minigrid
 import gymnasium as gym_ # the gym environment has moved to gymnasium for minigrid
 import numpy as np
 
 # create a simple empty partially observable 8x8 grid
-env = gym_.make('MiniGrid-Empty-8x8-v0')
+env = gym_.make('MiniGrid-Empty-8x8-v0', render_mode="human")
+
+#envs = gym_.vector.make('MiniGrid-Empty-8x8-v0', num_envs=3, shared_memory=False)
+
 
 print("observation space: ", env.observation_space.shape)
 observation, info = env.reset()
@@ -60,6 +63,10 @@ cxs = torch.zeros(1, 256, dtype=torch.float32, device="cpu")
 x, (hxs, cxs) = lstm(obs_.unsqueeze(0), (hxs, cxs))
 
 print(x)
+
+for _ in range(100):
+    obs, reward, done, trunc, info = env.step(env.action_space.sample())
+    env.render()
 
 
 

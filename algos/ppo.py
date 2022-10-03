@@ -3,6 +3,7 @@ import numpy as np
 import torch as T
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
 
 class PPOMemory:
@@ -53,21 +54,29 @@ class ActorNetwork(nn.Module):
         super(ActorNetwork, self).__init__()
 
         self.checkpoint_file = os.path.join(chkpt_dir, 'actor_torch_ppo')
-        self.actor = nn.Sequential(
-                nn.Linear(*input_dims, fc1_dims),
-                nn.ReLU(),
-                nn.Linear(fc1_dims, fc2_dims),
-                nn.ReLU(),
-                nn.Linear(fc2_dims, n_actions),
-                nn.Softmax(dim=-1)
-        )
+        #self.actor = nn.Sequential(
+        #        nn.Linear(*input_dims, fc1_dims),
+        #        nn.ReLU(),
+        #        nn.Linear(fc1_dims, fc2_dims),
+        #        nn.ReLU(),
+        #        nn.Linear(fc2_dims, n_actions),
+        #        nn.Softmax(dim=-1)
+        #)
+        self.fc1 = nn.Linear(*input_dims, fc1_dims)
+        self.fc2 = nn.Linear(fc1_dims, fc2_dims)
+        self.actor_ = nn.Linear(fc2_dims, n_actions)
+        self.output = nn.Softmax(dim=-1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def forward(self, state):
-        dist = self.actor(state)
+        #dist = self.actor(state)
+        dist = F.relu(self.fc1(state))
+        dist = F.relu(self.fc2(dist))
+        dist = self.actor_(dist)
+        dist = self.output(dist)
         dist = Categorical(dist)
         
         return dist
@@ -84,22 +93,28 @@ class CriticNetwork(nn.Module):
         super(CriticNetwork, self).__init__()
 
         self.checkpoint_file = os.path.join(chkpt_dir, 'critic_torch_ppo')
-        self.critic = nn.Sequential(
-                nn.Linear(*input_dims, fc1_dims),
-                nn.ReLU(),
-                nn.Linear(fc1_dims, fc2_dims),
-                nn.ReLU(),
-                nn.Linear(fc2_dims, 1)
-        )
+        #self.critic = nn.Sequential(
+        #        nn.Linear(*input_dims, fc1_dims),
+        #        nn.ReLU(),
+        #        nn.Linear(fc1_dims, fc2_dims),
+        #        nn.ReLU(),
+        #        nn.Linear(fc2_dims, 1)
+        #)
+        self.fc1 = nn.Linear(*input_dims, fc1_dims)
+        self.fc2 = nn.Linear(fc1_dims, fc2_dims)
+        self.value = nn.Linear(fc2_dims, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def forward(self, state):
-        value = self.critic(state)
-
-        return value
+        #value = self.critic(state)
+        state_value =  F.relu(self.fc1(state))
+        state_value = F.relu(self.fc2(state_value))
+        state_value = self.value(state_value)
+        
+        return state_value
 
     def save_checkpoint(self):
         T.save(self.state_dict(), self.checkpoint_file)
