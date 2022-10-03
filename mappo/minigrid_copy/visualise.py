@@ -9,7 +9,7 @@ import torch
 
 
 # create a simple empty partially observable 8x8 grid
-env = gym_.make('MiniGrid-DoorKey-5x5-v0', render_mode='human')
+env = gym_.make('MiniGrid-RedBlueDoors-6x6-v0', render_mode='human')
 
 env = ImgObsWrapper(env)
 
@@ -21,7 +21,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 obs, info = env.reset()
 dir = '/home/thomas/ai_projects/MAS_MT_RL/mappo/minigrid_copy/tmp/ppo'
 agent = Agent(obs_space=obs_space, action_space=env.action_space, 
-    device=device, preprocess_obs=preprocess_obs, use_memory=False, argmax=False)
+    device=device, preprocess_obs=preprocess_obs, use_memory=True, argmax=False)
 
 for _ in range(20):
     observation, info = env.reset()

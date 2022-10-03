@@ -14,12 +14,14 @@ import numpy as np
 
 writer = SummaryWriter()
 
-num_procs = 10
+# TODO introduce some args to continue training a model
+
+num_procs = 5
 env = ""
 
 envs = []
 for i in range(num_procs):
-    envs.append(make_env('MiniGrid-Fetch-8x8-N3-v0', 1234 + 10000 * i))
+    envs.append(make_env('MiniGrid-RedBlueDoors-6x6-v0', 1234 + 10000 * i))
 
 
 lr = 0.001
@@ -36,7 +38,7 @@ ppo = PPO(envs=envs, acmodel=model, device=device, preprocess_obss=preprocess_ob
 txt_logger = get_txt_logger()
 model_dir = '/home/thomas/ai_projects/MAS_MT_RL/mappo/minigrid_copy/tmp/ppo'
 
-frames = 100000  #status["num_frames"]
+frames = 1000000  #status["num_frames"]
 update = 0 # status["update"]
 num_frames = 0
 start_time = time.time()
@@ -65,11 +67,9 @@ while num_frames < frames and best_score < 0.97:
         rreturn_per_episode = synthesize(logs["reshaped_return_per_episode"])
         num_frames_per_episode = synthesize(logs["num_frames_per_episode"])
         
-
-        score_history.append(return_per_episode["mean"])
-        if np.mean(score_history) > best_score:
-            best_score = np.mean(score_history)
-            print("best score: ", best_score)
+        if return_per_episode["mean"] > best_score:
+            best_score = return_per_episode["mean"]
+            #print("best score: ", best_score)
             # save the models
             model.save_models()  
 
