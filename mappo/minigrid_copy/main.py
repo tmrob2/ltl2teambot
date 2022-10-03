@@ -7,17 +7,19 @@ from mappo.minigrid_copy.utils.storage import get_txt_logger, synthesize
 from mappo.minigrid_copy.network import ACModel
 from torch.utils.tensorboard import SummaryWriter
 import torch
+from collections import deque
+import numpy as np
 
 # construct a set of environments
 
 writer = SummaryWriter()
 
-num_procs = 1
+num_procs = 10
 env = ""
 
 envs = []
 for i in range(num_procs):
-    envs.append(make_env('MiniGrid-Empty-8x8-v0', 1234 + 10000 * i))
+    envs.append(make_env('MiniGrid-Fetch-8x8-N3-v0', 1234 + 10000 * i))
 
 
 lr = 0.001
@@ -25,7 +27,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 obs_space, preprocess_obs = get_obss_preprocessor(envs[0].observation_space)
 
-model = ACModel(obs_space, envs[0].action_space, use_memory=False)
+model = ACModel(obs_space, envs[0].action_space, use_memory=True)
 model.to(device)
 
 ppo = PPO(envs=envs, acmodel=model, device=device, preprocess_obss=preprocess_obs, 
@@ -39,8 +41,9 @@ update = 0 # status["update"]
 num_frames = 0
 start_time = time.time()
 best_score = 0
+score_history = deque(maxlen=100)
 
-while num_frames < frames and best_score < 0.92:
+while num_frames < frames and best_score < 0.97:
     # Update model parameters
 
     update_start_time = time.time()
@@ -61,9 +64,12 @@ while num_frames < frames and best_score < 0.92:
         return_per_episode = synthesize(logs["return_per_episode"])
         rreturn_per_episode = synthesize(logs["reshaped_return_per_episode"])
         num_frames_per_episode = synthesize(logs["num_frames_per_episode"])
+        
 
-        if return_per_episode["mean"] > best_score:
-            best_score = return_per_episode["mean"]
+        score_history.append(return_per_episode["mean"])
+        if np.mean(score_history) > best_score:
+            best_score = np.mean(score_history)
+            print("best score: ", best_score)
             # save the models
             model.save_models()  
 

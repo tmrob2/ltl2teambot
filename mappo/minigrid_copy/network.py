@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.categorical import Categorical
 from mappo.minigrid_copy.utils.base_model import RecurrentACModel
+from copy import deepcopy
 
 
 # Function from https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/blob/master/model.py
@@ -95,10 +96,6 @@ class ACModel(nn.Module, RecurrentACModel):
         else:
             embedding = x
 
-        if self.use_text:
-            embed_text = self._get_embed_text(obs.text)
-            embedding = torch.cat((embedding, embed_text), dim=1)
-
         x = self.actor(embedding)
         dist = Categorical(logits=F.log_softmax(x, dim=1))
 
@@ -113,7 +110,7 @@ class ACModel(nn.Module, RecurrentACModel):
 
     def save_models(self):
         print('... saving models ...')
-        torch.save(self.state_dict(), self.checkpoint_file)
+        torch.save(deepcopy(self.state_dict()), self.checkpoint_file)
 
     def load_models(self):
         print('... loading models ...')

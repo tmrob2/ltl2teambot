@@ -11,13 +11,12 @@ class Agent:
         device,
         argmax=False, 
         num_envs=1,
-        file=None,
+        use_memory=False,
         preprocess_obs=None
         ) -> None:
         
         self.preprocess_obs = preprocess_obs
-        obs_space = {"image": obs_space.shape }
-        self.model = ACModel(obs_space, action_space, use_memory=True)
+        self.model = ACModel(obs_space, action_space, use_memory=use_memory)
         self.model.load_models()
         
         self.device = device
@@ -39,8 +38,10 @@ class Agent:
         obs = self.preprocess_obs(obs, device=self.device)
 
         with torch.no_grad():
-            dist, (self.ah_memories, self.ac_memories) = \
-                self.actor_model(obs.unsqueeze(0), (self.ah_memories, self.ac_memories))
+            if self.model.use_memory:
+                dist, _, self.memories = self.model(obs, self.memories)
+            else: 
+                dist, _ = self.model(obs)
 
         if self.argmax:
             actions = dist.probs.max(1, keepdim=True)[1]
