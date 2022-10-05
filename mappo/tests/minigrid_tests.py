@@ -5,10 +5,13 @@
 
 #os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-from mappo.utils import FlatImageGrid
+from cgitb import text
+from mappo.tests.utils import FlatImageGrid
 import minigrid
 import gymnasium as gym_ # the gym environment has moved to gymnasium for minigrid
 import numpy as np
+import re
+import numpy
 
 # create a simple empty partially observable 8x8 grid
 env = gym_.make('MiniGrid-Empty-8x8-v0', render_mode="human")
@@ -27,6 +30,9 @@ observation, info = env.reset()
 from minigrid.wrappers import FlatObsWrapper
 
 print("image shape", observation["image"].shape)
+mission = observation["mission"]
+
+print("observation mission", observation["mission"])
 
 from functools import reduce
 import operator
@@ -62,11 +68,59 @@ hxs = torch.zeros(1, 256, dtype=torch.float32, device= "cpu")
 cxs = torch.zeros(1, 256, dtype=torch.float32, device="cpu")
 x, (hxs, cxs) = lstm(obs_.unsqueeze(0), (hxs, cxs))
 
-print(x)
+#print(x)
 
-for _ in range(100):
-    obs, reward, done, trunc, info = env.step(env.action_space.sample())
-    env.render()
+#for _ in range(100):
+#    obs, reward, done, trunc, info = env.step(env.action_space.sample())
+#    env.render()
+
+def preprocess_texts(texts, vocab, device=None):
+    var_indexed_texts = []
+    max_text_len = 0
+
+    for text in texts:
+        tokens = re.findall("([a-z]+)", text.lower())
+        var_indexed_text = numpy.array([vocab[token] for token in tokens])
+        var_indexed_texts.append(var_indexed_text)
+        max_text_len = max(len(var_indexed_text), max_text_len)
+
+    indexed_texts = numpy.zeros((len(texts), max_text_len))
+
+    for i, indexed_text in enumerate(var_indexed_texts):
+        indexed_texts[i, :len(indexed_text)] = indexed_text
+
+    return torch.tensor(indexed_texts, device=device, dtype=torch.long)
+
+
+class Vocabulary:
+    """A mapping from tokens to ids with a capacity of `max_size` words.
+    It can be saved in a `vocab.json` file."""
+
+    def __init__(self, max_size):
+        self.max_size = max_size
+        self.vocab = {}
+
+    def load_vocab(self, vocab):
+        self.vocab = vocab
+
+    def __getitem__(self, token):
+        if not token in self.vocab.keys():
+            if len(self.vocab) >= self.max_size:
+                raise ValueError("Maximum vocabulary capacity reached")
+            self.vocab[token] = len(self.vocab) + 1
+        return self.vocab[token]
+
+
+vocab = Vocabulary(100)
+
+input_text_tensor = preprocess_texts(mission, vocab)
+
+print("input shape", input_text_tensor.shape)
+
+
+text_embedding=nn.Embedding(input_text_tensor.shape[0], 32)
+x = text_embedding(input_text_tensor)
+print("text embedding", x.shape)
 
 
 

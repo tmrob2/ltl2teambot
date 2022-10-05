@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from mappo.networks.ltlnet import ACLTLModel
+from mappo.minigrid_copy.network import ACModel
 
 class Agent:
 
@@ -15,8 +15,8 @@ class Agent:
         preprocess_obs=None
         ) -> None:
         
-        self.preprocess_obs = preprocess_obs if preprocess_obs is not None else self.default_preprocess_obss
-        self.model = ACLTLModel(obs_space, action_space, use_memory=use_memory)
+        self.preprocess_obs = preprocess_obs
+        self.model = ACModel(obs_space, action_space, use_memory=use_memory)
         self.model.load_models()
         
         self.device = device
@@ -52,9 +52,6 @@ class Agent:
 
     def get_action(self, obs):
         return self.get_actions([obs])[0]
-
-    def default_preprocess_obss(self, obss, device=None):
-        return torch.tensor(np.array(obss), device=device, dtype=torch.float)
 
     
 

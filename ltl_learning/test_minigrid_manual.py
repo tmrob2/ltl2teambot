@@ -4,8 +4,8 @@ import torch
 
 from gym_env import AdversarialEnv9x9
 
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.evaluation import evaluate_policy
+#from stable_baselines3.common.monitor import Monitor
+#from stable_baselines3.common.evaluation import evaluate_policy
 
 
 MANUAL_CONTROL = False
@@ -25,11 +25,11 @@ def control(letter):
 env = AdversarialEnv9x9()
 
 obs = env.reset()
-env.render('human')
+env.render()
 for i in range(10000):
     action = control(input())
     obs, rew, done, _ = env.step(action)
-    env.render('human')
+    env.render()
     time.sleep(.25)
     if done:
         env.reset()

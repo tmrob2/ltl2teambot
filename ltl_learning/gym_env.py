@@ -1,6 +1,9 @@
 from hashlib import new
-from minigrid.minigrid import *
+from minigrid import *
+from minigrid.core.world_object import WorldObj
+from minigrid.minigrid_env import *
 from minigrid import register
+from gymnasium import spaces
 
 from ltl_operators import progress, is_accomplished
 from utils import build_relations
@@ -30,7 +33,7 @@ class AdversarialEnv(MiniGridEnv):
         agent_start_pos=(1,1),  # starting agent position
         agent_start_dir=0,      # starting agent orientation
         fixed_task=None,        # set an LTL instruction to be kept at every env reset
-        timeout=100             # max steps that the agent can do
+        timeout=100,             # max steps that the agent can do
     ):
         self.agent_start_pos = agent_start_pos
         self.agent_start_dir = agent_start_dir
@@ -44,7 +47,7 @@ class AdversarialEnv(MiniGridEnv):
         self.super_init(
             grid_size=size,
             max_steps=4*size*size,
-            see_through_walls=True # set this to True for maximum speed
+            see_through_walls=True, # set this to True for maximum speed
         )
 
     def super_init(
@@ -290,5 +293,5 @@ class AdversarialEnv9x9(AdversarialEnv):
     def __init__(self, agent_start_pos=None, fixed_task=None):
         super().__init__(size=9,
                          agent_start_pos=agent_start_pos,
-                         fixed_task=fixed_task  
+                         fixed_task=fixed_task,
                         )
