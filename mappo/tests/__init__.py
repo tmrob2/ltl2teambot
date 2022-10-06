@@ -1,1 +1,0 @@
-from mappo.tests.manual_grid import LTLTestEnv1

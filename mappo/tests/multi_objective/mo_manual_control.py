@@ -4,8 +4,8 @@ from minigrid.utils.window import Window
 from minigrid.wrappers import ImgObsWrapper, RGBImgPartialObsWrapper
 
 register(
-    'LTL1Custom-6x6-v0', 
-    entry_point='mappo.tests:LTLTestEnv1'
+    'MOLTLTest-6x6-v0', 
+    entry_point='mappo.tests.multi_objective:MOLTLTestEnv'
 )
 
 
@@ -81,42 +81,5 @@ def key_handler(env, window, event):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--env", help="gym environment to load", default="LTL1Custom-6x6-v0"
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        help="random seed to generate the environment with",
-        default=-1,
-    )
-    parser.add_argument(
-        "--tile_size", type=int, help="size at which to render tiles", default=32
-    )
-    parser.add_argument(
-        "--agent_view",
-        default=False,
-        help="draw the agent sees (partially observable view)",
-        action="store_true",
-    )
-
-    args = parser.parse_args()
-
-    env = gym.make(
-        args.env,
-        tile_size=args.tile_size,
-    )
-
-    if args.agent_view:
-        env = RGBImgPartialObsWrapper(env)
-        env = ImgObsWrapper(env)
-
-    window = Window("minigrid - " + args.env)
-    window.reg_key_handler(lambda event: key_handler(env, window, event))
-
-    seed = None if args.seed == -1 else args.seed
-    reset(env, window, seed)
-
-    # Blocking event loop
-    window.show(block=True)
+    env = gym.make("MOLTLTest-6x6-v0")
+    
