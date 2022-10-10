@@ -79,6 +79,7 @@ def progress(formula, assignment):
 
     else:
         # unknown operator found
+        print(op)
         raise NotImplementedError
 
 

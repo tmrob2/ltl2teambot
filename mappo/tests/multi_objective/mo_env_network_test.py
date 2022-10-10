@@ -278,12 +278,13 @@ AH = torch.stack(stack)
 
 
 #computeH(ini_values, ini_values, mu, num_agents, num_procs)
-
+print(
 """
 ---------------------------------------\n
 TEST: Testing multi-objective output shapes\n
 ---------------------------------------\n
 """
+)
 exps = DictList()
 exps.obs = [obss[i][j] for j in range(num_procs) for i in range(num_frames_per_proc)]
 # T x P x D -> P x T x D -> (P.T) x D remains the same as single objective.
@@ -298,13 +299,13 @@ print("values reshaped shape", values.transpose(0, 1).reshape(-1, *values.shape[
 exps.value = values.transpose(0, 1).reshape(-1, *values.shape[2:])
 exps.reward = rewards.transpose(0, 1).reshape(-1, *rewards.shape[2:])
 
-
+print(
 """
 ---------------------------------------\n
 TEST: Testing base actor-critic data collection\n
 ---------------------------------------\n
 """
-
+)
 from mappo.algorithms.mo_base import BaseAlgorithm
 
 base = BaseAlgorithm(
