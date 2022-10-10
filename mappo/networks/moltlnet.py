@@ -18,10 +18,10 @@ def init_params(m):
             m.bias.data.fill_(0)
 
 
-class ACLTLModel(nn.Module, RecurrentACModel):
+class AC_MO_LTL_Model(nn.Module, RecurrentACModel):
     def __init__(
         self, 
-        obs_space, 
+        #obs_space, 
         action_space, 
         num_tasks,
         partial_obs_dims = (7, 7),
@@ -31,7 +31,9 @@ class ACLTLModel(nn.Module, RecurrentACModel):
         ):
         super().__init__()
 
-        self.checkpoint_file = os.path.join(chkpt_file, 'actor_torch_ppo')
+        self.checkpoint_file = \
+            "/home/thomas/ai_projects/MAS_MT_RL/mappo/tmp/ppo/mo_actor_torch_ppo"
+        #os.path.join(chkpt_file, 'mo_actor_torch_ppo')
 
         # Decide which components are enabled
         self.use_text = use_text

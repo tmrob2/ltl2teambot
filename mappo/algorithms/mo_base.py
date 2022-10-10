@@ -10,6 +10,8 @@ class BaseAlgorithm:
         envs, 
         acmodel,
         device,
+        num_agents,
+        num_objectives,
         num_frames_per_proc, 
         discount, 
         lr, 
@@ -60,6 +62,8 @@ class BaseAlgorithm:
         self.acmodel = acmodel
         self.device = device
         self.num_frames_per_proc = num_frames_per_proc
+        self.num_agents = num_agents
+        self.num_objectives = num_objectives
         self.discount = discount
         self.lr = lr
         self.gae_lambda = gae_lambda
@@ -75,9 +79,10 @@ class BaseAlgorithm:
         self.acmodel.train()
 
         self.num_procs = len(envs)
-        self.num_frames = self.num_frames_per_proc * self.num_procs
+        self.num_frames = self.num_frames_per_proc * self.num_procs * self.num_agents
 
-        shape = (self.num_frames_per_proc, self.num_procs)
+        shape = (self.num_frames_per_proc, self.num_procs * self.num_agents)
+        mo_shape = (self.num_frames_per_proc, self.num_procs * self.num_agents, self.num_objectives)
 
         self.obs = self.env.reset()
         self.obss = [None]*(shape[0])
@@ -87,24 +92,29 @@ class BaseAlgorithm:
         self.mask = torch.ones(shape[1], device=self.device)
         self.masks = torch.zeros(*shape, device=self.device)
         self.actions = torch.zeros(*shape, device=self.device, dtype=torch.int)
-        self.values = torch.zeros(*shape, device=self.device)
-        self.rewards = torch.zeros(*shape, device=self.device)
-        self.advantages = torch.zeros(*shape, device=self.device)
+        self.values = torch.zeros(*mo_shape, device=self.device)
+        self.rewards = torch.zeros(*mo_shape, device=self.device)
+        self.advantages = torch.zeros(*mo_shape, device=self.device)
         self.log_probs = torch.zeros(*shape, device=self.device)
 
         # Initialize log values
 
-        self.log_episode_return = torch.zeros(self.num_procs, device=self.device)
-        self.log_episode_reshaped_return = torch.zeros(self.num_procs, device=self.device)
-        self.log_episode_num_frames = torch.zeros(self.num_procs, device=self.device)
+        self.log_episode_return = torch.zeros(
+            self.num_agents * self.num_procs, self.num_objectives, device=self.device
+        )
+        self.log_episode_reshaped_return = torch.zeros(
+            self.num_agents * self.num_procs, self.num_objectives, device=self.device
+        )
+        self.log_episode_num_frames = torch.zeros(self.num_procs * self.num_agents, device=self.device)
 
-        self.log_done_counter = 0
-        self.log_return = [0] * self.num_procs
-        self.log_reshaped_return = [0] * self.num_procs
-        self.log_num_frames = [0] * self.num_procs
+        self.log_done_counter = [0] * self.num_agents 
+        self.log_total_done_counter = 0
+        self.log_return = [[np.zeros(3)] * self.num_procs for _ in range(self.num_agents)]
+        #self.log_reshaped_return = [[] for _ in range(self.num_agents)]
+        self.log_num_frames = [0] * self.num_procs * self.num_agents
 
 
-    def collect_experiences(self):
+    def collect_experiences(self, mu, c, e):
         """Collects rollouts and computes advantages.
         Runs several environments concurrently. The next actions are computed
         in a batch mode for all environments at the same time. The rollouts
@@ -135,6 +145,8 @@ class BaseAlgorithm:
             action = dist.sample()
 
             obs, reward, done, trunc, _ = self.env.step(action.cpu().numpy())
+            if len(done) > 10:
+                print("done > 5: ", done)
 
             # Update experiences values
 
@@ -167,13 +179,15 @@ class BaseAlgorithm:
 
             for i, done_ in enumerate(done):
                 if done_:
-                    self.log_done_counter += 1
-                    self.log_return.append(self.log_episode_return[i].item())
-                    self.log_reshaped_return.append(self.log_episode_reshaped_return[i].item())
+                    agent = i // self.num_procs
+                    self.log_total_done_counter += 1
+                    self.log_done_counter[agent] += 1
+                    self.log_return[agent].append(self.log_episode_return[i].cpu().numpy())
+                    #self.log_return.append(self.log_episode_return[i].cpu().numpy())
+                    #self.log_reshaped_return.append(self.log_episode_reshaped_return[i].cpu().numpy())
                     self.log_num_frames.append(self.log_episode_num_frames[i].item())
-
-            self.log_episode_return *= self.mask
-            self.log_episode_reshaped_return *= self.mask
+            self.log_episode_return *= self.mask.unsqueeze(1)
+            self.log_episode_reshaped_return *= self.mask.unsqueeze(1)
             self.log_episode_num_frames *= self.mask
 
         # Add advantage and return to experiences
@@ -190,8 +204,29 @@ class BaseAlgorithm:
             next_value = self.values[i+1] if i < self.num_frames_per_proc - 1 else next_value
             next_advantage = self.advantages[i+1] if i < self.num_frames_per_proc - 1 else 0
 
-            delta = self.rewards[i] + self.discount * next_value * next_mask - self.values[i]
-            self.advantages[i] = delta + self.discount * self.gae_lambda * next_advantage * next_mask
+            delta = self.rewards[i] + self.discount * next_value * next_mask.unsqueeze(1) - self.values[i]
+            self.advantages[i] = delta + self.discount * self.gae_lambda * next_advantage * next_mask.unsqueeze(1)
+
+        # Modify the advantage with the task allocation parameters
+
+        ini_values = torch.reshape(self.values.transpose(0, 1), 
+            (self.num_agents, self.num_procs, self.num_frames_per_proc, self.num_objectives))[:, :, 0, :]
+        
+
+        # Compute H
+        H = []
+        for i in range(self.num_agents):
+            Hi = self.computeH(ini_values, mu, i, c, e)
+            H.append(Hi)
+
+        H = torch.stack(H)
+        H_ = H.reshape(self.num_agents * self.num_procs, self.num_objectives)
+
+        stack = []
+        for k in range(self.num_agents *self.num_procs):
+            stack.append(torch.matmul(self.advantages[:, k, :], H_[k, :]))
+
+        mod_advantage = torch.stack(stack)
 
         # Define experiences:
         #   the whole experience is the concatenation of the experience
@@ -210,13 +245,19 @@ class BaseAlgorithm:
             exps.memory = self.memories.transpose(0, 1).reshape(-1, *self.memories.shape[2:])
             # T x P -> P x T -> (P * T) x 1
             exps.mask = self.masks.transpose(0, 1).reshape(-1).unsqueeze(1)
+        
         # for all tensors below, T x P -> P x T -> P * T
         exps.action = self.actions.transpose(0, 1).reshape(-1)
-        exps.value = self.values.transpose(0, 1).reshape(-1)
-        exps.reward = self.rewards.transpose(0, 1).reshape(-1)
-        exps.advantage = self.advantages.transpose(0, 1).reshape(-1)
-        exps.returnn = exps.value + exps.advantage
+        #exps.advantage = self.advantages.transpose(0, 1).reshape(-1)
+        exps.advantage = mod_advantage.reshape(-1)
+        #exps.ini_values = ini_values
         exps.log_prob = self.log_probs.transpose(0, 1).reshape(-1)
+        
+        # T x P x O -> P x T x O -> P * T x O
+        exps.value = self.values.transpose(0, 1).reshape(-1, *self.values.shape[2:])
+        exps.reward = self.rewards.transpose(0, 1).reshape(-1, *self.rewards.shape[2:])
+        exps.returnn = exps.value + \
+            self.advantages.transpose(0, 1).reshape(-1, *self.advantages.shape[2:])
 
         # Preprocess experiences
 
@@ -224,21 +265,35 @@ class BaseAlgorithm:
 
         # Log some values
 
-        keep = max(self.log_done_counter, self.num_procs)
+        keeps = [
+            max(self.log_done_counter[agent], self.num_procs * self.num_agents) 
+            for agent in range(self.num_agents)
+        ]
 
-        logs = {
-            "return_per_episode": self.log_return[-keep:],
-            "reshaped_return_per_episode": self.log_reshaped_return[-keep:],
-            "num_frames_per_episode": self.log_num_frames[-keep:],
-            "num_frames": self.num_frames
-        }
+        keep = max(self.log_total_done_counter, self.num_procs * self.num_agents)
 
-        self.log_done_counter = 0
-        self.log_return = self.log_return[-self.num_procs:]
-        self.log_reshaped_return = self.log_reshaped_return[-self.num_procs:]
-        self.log_num_frames = self.log_num_frames[-self.num_procs:]
+        try:
+            logs = {
+                "return_per_episode": [
+                    self.log_return[i][-keeps[i]:] for i in range(self.num_agents)
+                ],
+                #"reshaped_return_per_episode": np.array(self.log_reshaped_return[-keep:]).reshape(self.num_agents, self.num_procs, self.num_objectives),
+                "num_frames_per_episode": self.log_num_frames[-keep:],
+                "num_frames": self.num_frames
+            }
+        except Exception as e:
+            print(e)
 
-        return exps, logs
+        self.log_done_counter = [0] * self.num_agents
+        self.log_total_done_counter = 0
+        self.log_return = [
+            self.log_return[i][-self.num_procs:] 
+            for i in range(self.num_agents)
+        ]
+       # self.log_reshaped_return = self.log_reshaped_return[-self.num_procs * self.num_agents:]
+        self.log_num_frames = self.log_num_frames[-self.num_procs * self.num_agents:]
+
+        return exps, logs, ini_values
     
     def default_preprocess_obss(self, obss, device=None):
         return torch.tensor(np.array(obss), device=device, dtype=torch.float)
@@ -252,3 +307,35 @@ class BaseAlgorithm:
         print('... loading models ...')
         self.actor.load_checkpoint()
         self.critic.load_checkpoint()
+
+
+    def df(self, x, c):
+        #if x <= c: 
+        #    return 2*(c - x)
+        #else:
+        #    return 0.0
+        return torch.where(x <= c, 2*(c - x), 0.0)
+
+
+    def dh(self, x, e):
+        #if x <= e:
+        #    return 2 * (e - x)
+        #else:
+        #    return 0.0
+        return torch.where(x <= e, 2 * (e - x), 0.0)
+
+
+    def computeH(self, X, mu, agent, c, e):
+        # todo need to loop over each environment
+        _, _, y = X.shape
+        H_ = [] 
+        H_.append(self.df(X[agent, :, 0], c))
+        for j in range(1, y):
+            #print(X[:, k, j - 1])
+            H_.append(
+                self.dh(torch.sum(mu[:, j - 1].unsqueeze(1) * X[:, :, j], dim=0), e) \
+                    * mu[agent, j - 1]
+            )
+
+        H = torch.stack(H_, 1)
+        return H

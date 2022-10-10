@@ -5,12 +5,18 @@ import collections
 import numpy as np
 import torch
 
-def synthesize(array):
+def synthesize(array, multi_obj=False):
     d = collections.OrderedDict()
-    d["mean"] = np.mean(array)
-    d["std"] = np.std(array)
-    d["min"] = np.amin(array)
-    d["max"] = np.amax(array)
+    if not multi_obj:
+        d["mean"] = np.mean(array)
+        d["std"] = np.std(array)
+        d["min"] = np.amin(array)
+        d["max"] = np.amax(array)
+    else:
+        d["mean"] = np.mean(array, axis=1)
+        d["std"] = np.std(array, axis=1)
+        d["min"] = np.amin(array, axis=1)
+        d["max"] = np.amax(array, axis=1)
     return d
 
 def get_txt_logger():

@@ -74,7 +74,8 @@ class PPO(BaseAlgorithm):
                     # Compute loss
 
                     if self.acmodel.use_memory:
-                        dist, value, memory = self.acmodel(sb.obs, memory * sb.mask)
+                        dist, value, memory = \
+                            self.acmodel(sb.obs, memory * sb.mask)
                     else:
                         dist, value = self.acmodel(sb.obs)
 
@@ -82,15 +83,22 @@ class PPO(BaseAlgorithm):
 
                     ratio = torch.exp(dist.log_prob(sb.action) - sb.log_prob)
                     surr1 = ratio * sb.advantage
-                    surr2 = torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * sb.advantage
+                    surr2 = torch.clamp(
+                        ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps
+                    ) * sb.advantage
                     policy_loss = -torch.min(surr1, surr2).mean()
 
-                    value_clipped = sb.value + torch.clamp(value - sb.value, -self.clip_eps, self.clip_eps)
+                    # TODO the value from the model is it agent x (tasks + 1)
+                    value_clipped = sb.value + torch.clamp(
+                        value - sb.value, -self.clip_eps, self.clip_eps
+                    )
                     surr1 = (value - sb.returnn).pow(2)
                     surr2 = (value_clipped - sb.returnn).pow(2)
                     value_loss = torch.max(surr1, surr2).mean()
 
-                    loss = policy_loss - self.entropy_coef * entropy + self.value_loss_coef * value_loss
+                    loss = policy_loss - \
+                        self.entropy_coef * entropy + \
+                        self.value_loss_coef * value_loss
 
                     # Update batch values
 

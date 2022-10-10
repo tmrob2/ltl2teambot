@@ -9,12 +9,12 @@ env = gym_.make('MiniGrid-Empty-8x8-v0')
 env = FlatImageGrid(env)
 observation, info = env.reset()
 
-from mappo.networks.network import ActorNetwork, CriticNetwork
+from mappo.networks.network import ACModel
 import torch
 
 print("The observation size of the network", env.observation_space.shape[0])
 
-actor = ActorNetwork(
+actor = ACModel(
     env.action_space.n, 
     input_dims=env.observation_space.shape[0],
     alpha = 0.001

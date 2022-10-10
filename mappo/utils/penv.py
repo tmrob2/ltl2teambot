@@ -15,7 +15,7 @@ def worker(conn, env):
                 obs, info = env.reset()
             conn.send((obs, reward, terminated, truncated, info))
         elif cmd == "reset":
-            obs, info = env.reset()
+            obs, info = env.reset(seed=1234)
             conn.send(obs)
         else:
             raise NotImplementedError
@@ -42,7 +42,7 @@ class ParallelEnv(gym.Env):
     def reset(self):
         for local in self.locals:
             local.send(("reset", None))
-        local_obs, _ = self.envs[0].reset()
+        local_obs, _ = self.envs[0].reset(seed=1234)
         results = [local_obs] + [local.recv() for local in self.locals]
         return results
 
@@ -59,9 +59,12 @@ class ParallelEnv(gym.Env):
         raise NotImplementedError
 
 def encode_mission(mission):
+    try:
         syms = "AONGUXE[]rgb"
         V = {k: v+1 for v, k in enumerate(syms)}
-        return [V[e] for e in mission if e not in ["\'", ",", " "]]    
+        return [V[e] for e in mission if e not in ["\'", ",", " "]]   
+    except Exception as e:
+        print(e) 
 
 def get_obss_preprocessor(obs_space):
     # Check if obs_space is an image space

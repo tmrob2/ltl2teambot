@@ -181,7 +181,9 @@ class BaseAlgorithm:
         preprocessed_obs = self.preprocess_obss(self.obs, device=self.device)
         with torch.no_grad():
             if self.acmodel.recurrent:
-                _, next_value, _ = self.acmodel(preprocessed_obs, self.memory * self.mask.unsqueeze(1))
+                _, next_value, _ = self.acmodel(
+                    preprocessed_obs, self.memory * self.mask.unsqueeze(1)
+                )
             else:
                 _, next_value = self.acmodel(preprocessed_obs)
 
@@ -214,6 +216,7 @@ class BaseAlgorithm:
         exps.action = self.actions.transpose(0, 1).reshape(-1)
         exps.value = self.values.transpose(0, 1).reshape(-1)
         exps.reward = self.rewards.transpose(0, 1).reshape(-1)
+        # store the modified task allocated advantage not the regular advantage
         exps.advantage = self.advantages.transpose(0, 1).reshape(-1)
         exps.returnn = exps.value + exps.advantage
         exps.log_prob = self.log_probs.transpose(0, 1).reshape(-1)
