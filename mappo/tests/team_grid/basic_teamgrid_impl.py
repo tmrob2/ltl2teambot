@@ -92,7 +92,12 @@ while num_frames < frames and best_score < 0.95:#any(i < 0.95 for a in best_scor
         num_frames_per_episode = synthesize(logs["num_frames_per_episode"])
         
         # for each agent check the progress against the recorded best score
-        batch_score = np.mean(return_per_episode['mean'])
+        #batch_score = np.mean(return_per_episode['mean'])
+
+        output = np.array(return_per_episode['mean'])
+        average_cost = np.mean(output[:, 0])
+        avergae_task_score = np.mean(mu.cpu().numpy() * output[:, 1:])
+        batch_score = average_cost + avergae_task_score
         if batch_score > best_score:
             best_score = batch_score
             model.save_models()
