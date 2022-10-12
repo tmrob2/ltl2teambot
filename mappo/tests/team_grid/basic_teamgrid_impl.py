@@ -63,13 +63,13 @@ frames = 10000000  #status["num_frames"]
 update = 0 # status["update"]
 num_frames = 0
 start_time = time.time()
-#best_score = 0
-best_scores = [[0.] * (num_tasks + 1)] * num_agents
+best_score = 0.
+#best_scores = [[0.] * (num_tasks + 1)] * num_agents
 score_history = deque(maxlen=100)
 np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)})
 
 
-while num_frames < frames and any(i < 0.95 for a in best_scores for i in a):
+while num_frames < frames and best_score < 0.95:#any(i < 0.95 for a in best_scores for i in a):
     # Update model parameters
 
     update_start_time = time.time()
@@ -92,10 +92,14 @@ while num_frames < frames and any(i < 0.95 for a in best_scores for i in a):
         num_frames_per_episode = synthesize(logs["num_frames_per_episode"])
         
         # for each agent check the progress against the recorded best score
-        for i in range(num_agents):
-            if any(x > best_scores[i][k]  for k, x in enumerate(return_per_episode['mean'][i])):
-                best_scores[i] = return_per_episode['mean'][i]
-                model.save_models()  
+        batch_score = np.mean(return_per_episode['mean'])
+        if batch_score > best_score:
+            best_score = batch_score
+            model.save_models()
+        #for i in range(num_agents):
+        ##if any(x > best_scores[i][k]  for k, x in enumerate(return_per_episode['mean'][i])):
+        ##    best_scores[i] = return_per_episode['mean'][i]
+        #model.save_models()  
 
         header = ["update", "frames", "FPS", "duration"]
         data = [update, num_frames, fps, duration]
