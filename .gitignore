@@ -1,0 +1,13 @@
+MiniGrid/
+algos/runs/
+algos/tmp/
+ltl_learning/__pycache__/
+mappo/__pycache__/
+mappo/envs/__pycache__/
+mappo/minigrid_copy/__pycache__/
+mappo/minigrid_copy/runs/
+mappo/minigrid_copy/tmp/
+mappo/runs/
+mappo/tmp/
+myproject.egg-info/
+runs/
