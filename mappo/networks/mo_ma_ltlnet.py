@@ -36,8 +36,8 @@ class AC_MA_MO_LTL_Model(nn.Module, RecurrentACModel):
         #os.path.join(chkpt_file, 'mo_actor_torch_ppo')
 
         # Decide which components are enabled
-        self.use_text = use_text
         self.use_memory = use_memory
+        self.num_tasks = num_tasks
 
         # Define image embedding
         self.image_conv = nn.Sequential(
@@ -60,13 +60,11 @@ class AC_MA_MO_LTL_Model(nn.Module, RecurrentACModel):
         else: 
             self.recurrent = False
         # Resize image embedding
-        
-        #TODO self.embedding_size = self.semi_memory_size
 
         self.ltl_embedder = nn.Embedding(20, 8, padding_idx=0)
         self.ltl_rnn = nn.GRU(8, 32, num_layers=2, bidirectional=True, batch_first=True)
 
-        self.embedding_size = self.semi_memory_size + 32 * 2
+        self.embedding_size = self.semi_memory_size + self.num_tasks + 32 * 2
 
         # Define actor's model
         self.actor = nn.Sequential(
@@ -95,8 +93,9 @@ class AC_MA_MO_LTL_Model(nn.Module, RecurrentACModel):
 
     def forward(self, obs, memory=None):
 
-        img = obs[:, :147]
-        ltl = obs[: , 147:]
+        img = obs[:, :147]  # Observation of the env
+        task = obs[:, 147:147 + self.num_tasks] # Task allocation
+        ltl = obs[: , 147 + self.num_tasks:] # Progression of the task
 
         #x = img.transpose(1, 3).transpose(2, 3)
         x = img.reshape(obs.shape[0], self.n, self.m, 3).permute(0, 3, 1, 2)
@@ -115,7 +114,7 @@ class AC_MA_MO_LTL_Model(nn.Module, RecurrentACModel):
         _, h = self.ltl_rnn(embedded_formula)
         embedded_formula = h[:-2, :, :].transpose(0, 1).reshape(obs.shape[0], -1)
 
-        composed_x = torch.cat([embedding, embedded_formula], dim=1)
+        composed_x = torch.cat([embedding, task, embedded_formula], dim=1)
 
         x = self.actor(composed_x)
         dist = Categorical(logits=F.log_softmax(x, dim=1))

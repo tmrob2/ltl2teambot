@@ -27,13 +27,14 @@ class PPO(BaseAlgorithm):
         batch_size=256, 
         preprocess_obss=None,
         reshape_reward=None,
-        mu=None
+        mu=None,
+        seed=None
         ):
         num_frames_per_proc = num_frames_per_proc or 128
 
         super().__init__(envs, acmodel, device, num_agents, num_objectives,
             num_frames_per_proc, discount, lr, gae_lambda, entropy_coef,
-            value_loss_coef, max_grad_norm, recurrence, preprocess_obss, mu)
+            value_loss_coef, max_grad_norm, recurrence, preprocess_obss, mu, seed)
 
         self.clip_eps = clip_eps
         self.epochs = epochs

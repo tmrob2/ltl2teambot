@@ -8,7 +8,7 @@ class BaseAlgorithm:
     def __init__(
         self, 
         envs, 
-        acmodel,
+        acmodels,
         device,
         num_agents,
         num_objectives,
@@ -63,7 +63,7 @@ class BaseAlgorithm:
         assert mu is not None
 
         self.env = ParallelEnv(envs, mu, seed)
-        self.acmodel = acmodel
+        self.acmodels = acmodels
         self.device = device
         self.num_frames_per_proc = num_frames_per_proc
         self.num_agents = num_agents
@@ -80,22 +80,22 @@ class BaseAlgorithm:
 
         assert self.num_frames_per_proc % self.recurrence == 0
 
-        self.acmodel.train()
+        [self.acmodels[i].train() for i in range(num_agents)]
 
         self.num_procs = len(envs)
         self.num_frames = self.num_frames_per_proc * self.num_procs * self.num_agents
 
-        shape = (self.num_frames_per_proc, self.num_procs * self.num_agents)
-        mo_shape = (self.num_frames_per_proc, self.num_procs * self.num_agents, self.num_objectives)
+        shape = (self.num_frames_per_proc, self.num_agents, self.num_procs)
+        mo_shape = (self.num_frames_per_proc, self.num_agents, self.num_procs, self.num_objectives)
 
         self.obs = self.env.reset()
         self.obss = [None]*(shape[0])
-        if self.acmodel.recurrent:
-            self.memory = torch.zeros(shape[1], self.acmodel.memory_size, device=self.device)
-            self.memories = torch.zeros(*shape, self.acmodel.memory_size, device=self.device)
-        self.mask = torch.ones(shape[1], device=self.device)
+        if self.acmodels[0].recurrent:
+            self.memory = torch.zeros(num_agents, shape[2], self.acmodels[0].memory_size, device=self.device)
+            self.memories = torch.zeros(*shape, self.acmodels[0].memory_size, device=self.device)
+        self.mask = torch.ones(num_agents, shape[2], device=self.device)
         self.masks = torch.zeros(*shape, device=self.device)
-        self.actions = torch.zeros(*shape, device=self.device, dtype=torch.int)
+        self.actions = torch.zeros(shape, device=self.device, dtype=torch.int)
         self.values = torch.zeros(*mo_shape, device=self.device)
         self.rewards = torch.zeros(*mo_shape, device=self.device)
         self.advantages = torch.zeros(*mo_shape, device=self.device)
@@ -104,12 +104,12 @@ class BaseAlgorithm:
         # Initialize log values
 
         self.log_episode_return = torch.zeros(
-            self.num_agents * self.num_procs, self.num_objectives, device=self.device
+            self.num_agents, self.num_procs, self.num_objectives, device=self.device
         )
         self.log_episode_reshaped_return = torch.zeros(
-            self.num_agents * self.num_procs, self.num_objectives, device=self.device
+            self.num_agents, self.num_procs, self.num_objectives, device=self.device
         )
-        self.log_episode_num_frames = torch.zeros(self.num_procs * self.num_agents, device=self.device)
+        self.log_episode_num_frames = torch.zeros(self.num_agents, self.num_procs, device=self.device)
 
         self.log_done_counter = [0] * self.num_agents 
         #self.log_total_done_counter = 0
@@ -143,53 +143,62 @@ class BaseAlgorithm:
             # Do one agent-environment interaction
 
             preprocessed_obs = self.preprocess_obss(self.obs, device=self.device)
+            actions = []
+            values = []
+            memories = []
+
+            # for each of the models get the action distribution  and the critic value
             with torch.no_grad():
-                if self.acmodel.recurrent:
-                    dist, value, memory = self.acmodel(preprocessed_obs, self.memory * self.mask.unsqueeze(1))
-                else:
-                    dist, value = self.acmodel(preprocessed_obs)
-            action = dist.sample()
-            action_ = action.reshape(self.num_procs, self.num_agents).cpu().numpy()
+                for agent in range(self.num_agents):
+                    if self.acmodels[agent].recurrent:
+                        dist, value, memory = self.acmodels[agent](preprocessed_obs[agent], 
+                            self.memory[agent] * self.mask[agent].unsqueeze(1))
+                    else:
+                        dist, value = self.acmodels[agent](preprocessed_obs)
+                    actions.append(dist.sample())
+                    values.append(value)
+                    memories.append(memory)
+            
+            action_ = torch.cat(actions).reshape(self.num_procs, self.num_agents).cpu().numpy()
 
             obs, reward, done, trunc, _ = self.env.step(action_)
 
             # Update experiences values
             # convert the observation into the correct format for storage and processing
-            obs_ = np.array(self.obs).reshape(-1, obs[0][0].shape[0]).tolist()
-            # it is tricky now not to mix data so I am identifying exactly what transformations
-            # I am doing to the tensor
-            # the shape of rewards is P x A x O -> (P . A) x O therefore A is the second dim
-            reward = np.array(reward).reshape(-1, self.num_objectives)
-            self.obss[i] = obs_
+            obs_ = np.array(self.obs).transpose(1, 0, 2)
+            # In the decentralised experience collection, we need to keep the shape A x P so that 
+            # we can split everything on agents
+            reward = np.array(reward).transpose(1, 0, 2)
+            self.obss[i] = obs_ # the observation will then be a tensor of shape A x P x T
             self.obs = obs
-            if self.acmodel.recurrent:
+            if self.acmodels[0].recurrent:
                 self.memories[i] = self.memory
-                self.memory = memory
-            self.masks[i] = self.mask
-            done = torch.tensor(done, device=self.device, dtype=torch.float)
-            trunc = torch.tensor(trunc, device=self.device, dtype=torch.float)
-            done0 = done.reshape(-1)
-            trunc0 = trunc.reshape(-1)
-            max_done_or_trunc = torch.max(done0, trunc0)
+                self.memory = torch.cat(memories).reshape(self.num_agents, self.num_procs, self.num_frames_per_proc)
+            self.masks[i] = self.mask # TODO check the shape of this
+            done = torch.tensor(done, device=self.device, dtype=torch.float).transpose(0, 1) # make sure that this shape is correct
+            trunc = torch.tensor(trunc, device=self.device, dtype=torch.float).transpose(0, 1)
+            #done0 = done.reshape(-1)
+            #trunc0 = trunc.reshape(-1)
+            max_done_or_trunc = torch.max(done, trunc)
             self.mask = 1 - max_done_or_trunc
-            self.actions[i] = action
-            self.values[i] = value
-            self.rewards[i] = torch.tensor(reward, device=self.device)
-            self.log_probs[i] = dist.log_prob(action)
+            self.actions[i] = torch.cat(actions).reshape(self.num_agents, self.num_procs)
+            self.values[i] = torch.cat(values).reshape(self.num_agents, self.num_procs, self.num_objectives)
+            self.rewards[i] = torch.tensor(reward, device=self.device, dtype=torch.float)
+            self.log_probs[i] = dist.log_prob(self.actions[i])
 
             # Update log values
             self.log_episode_return += \
                 torch.tensor(reward, device=self.device, dtype=torch.float)
             self.log_episode_reshaped_return += self.rewards[i]
             self.log_episode_num_frames += \
-                torch.ones(self.num_procs * self.num_agents, device=self.device)
+                torch.ones(self.num_agents, self.num_procs, device=self.device)
 
             reshaped_log_episode_return = \
                 self.log_episode_return.reshape(self.num_procs, self.num_agents, self.num_objectives)
             reshaped_log_epsisode_frames = \
                 self.log_episode_num_frames.reshape(self.num_procs, self.num_agents)
-            for i, done_ in enumerate(done):
-                for agent, done__ in enumerate(done_):
+            for agent, done_ in enumerate(done):
+                for i, done__ in enumerate(done_):
                     if done__:
                         # TODO: the issue is that one agent finishes and the other continues
                         # diluting the value of the agent which finished earlier
@@ -200,26 +209,39 @@ class BaseAlgorithm:
                             #self.log_return.append(self.log_episode_return[i].cpu().numpy())
                             #self.log_reshaped_return.append(self.log_episode_reshaped_return[i].cpu().numpy())
                             self.log_num_frames.append(reshaped_log_epsisode_frames[i][0].item())
-            self.log_episode_return *= self.mask.unsqueeze(1)
+                self.log_episode_return[agent] *= self.mask[agent].unsqueeze(1)
             #self.log_episode_reshaped_return *= self.mask.unsqueeze(1)
             self.log_episode_num_frames *= self.mask
 
         # Add advantage and return to experiences
 
         preprocessed_obs = self.preprocess_obss(self.obs, device=self.device)
+        next_values = []
         with torch.no_grad():
-            if self.acmodel.recurrent:
-                _, next_value, _ = self.acmodel(preprocessed_obs, self.memory * self.mask.unsqueeze(1))
-            else:
-                _, next_value = self.acmodel(preprocessed_obs)
+            for agent in range(self.num_agents):
+                if self.acmodels[agent].recurrent:
+                    _, next_value, _ = self.acmodels[agent](preprocessed_obs[agent], 
+                        self.memory[agent] * self.mask[agent].unsqueeze(1))
+                else:
+                    _, next_value = self.acmodel(preprocessed_obs)
+                next_values.append(next_value)
+
+        next_values = torch.cat(next_values)
 
         for i in reversed(range(self.num_frames_per_proc)):
+            
             next_mask = self.masks[i+1] if i < self.num_frames_per_proc - 1 else self.mask
             next_value = self.values[i+1] if i < self.num_frames_per_proc - 1 else next_value
-            next_advantage = self.advantages[i+1] if i < self.num_frames_per_proc - 1 else 0
+            next_advantage = self.advantages[i+1] if i < self.num_frames_per_proc - 1 \
+                else torch.zeros(self.num_agents, self.num_procs, self.num_objectives, device=self.device, dtype=torch.float)
+            advantages = []
+            for agent in range(self.num_agents):
+                delta = self.rewards[i][agent] + self.discount * \
+                    next_value[agent] * next_mask[agent].unsqueeze(1) - self.values[i][agent]
+                advantage = delta + self.discount * self.gae_lambda * next_advantage[agent] * next_mask[agent].unsqueeze(1)
+                advantages.append(advantage)
+            self.advantages[i] = torch.cat(advantages).reshape(self.num_agents, self.num_procs, self.num_objectives)
 
-            delta = self.rewards[i] + self.discount * next_value * next_mask.unsqueeze(1) - self.values[i]
-            self.advantages[i] = delta + self.discount * self.gae_lambda * next_advantage * next_mask.unsqueeze(1)
 
         # Modify the advantage with the task allocation parameters
 
@@ -235,13 +257,16 @@ class BaseAlgorithm:
 
         H = torch.stack(H)
         # The output of H has shape A x P x O -> P x A x O -> (P . A ) x O
-        H_ = H.transpose(0, 1).reshape(self.num_agents * self.num_procs, self.num_objectives)
+        #H_ = H.transpose(0, 1).reshape(self.num_agents * self.num_procs, self.num_objectives)
 
-        stack = []
-        for k in range(self.num_agents *self.num_procs):
-            stack.append(torch.matmul(self.advantages[:, k, :], H_[k, :]))
-
-        mod_advantage = torch.stack(stack)
+        mod_advantage = []
+        for agent in range(self.num_agents):
+            stack = []
+            for k in range(self.num_procs):
+                stack.append(torch.matmul(self.advantages[:, agent, k, :], H[agent, k, :]))
+            mod_advantage.append(torch.stack(stack))
+        mod_advantage = torch.stack(mod_advantage)
+        mod_advantage = mod_advantage.reshape(self.num_agents, -1)
 
         # Define experiences:
         #   the whole experience is the concatenation of the experience
@@ -251,32 +276,33 @@ class BaseAlgorithm:
         #   - P is self.num_procs P = Procs x Agents in that order,
         #   - D is the dimensionality.
 
+        # The dimension of the experiences should be A x (P * T)
+        
         exps = DictList()
-        exps.obs = [self.obss[i][j]
-                    for j in range(self.num_procs * self.num_agents)
-                    for i in range(self.num_frames_per_proc)]
-        if self.acmodel.recurrent:
-            # T x P x D -> P x T x D -> (P * T) x D
-            exps.memory = self.memories.transpose(0, 1).reshape(-1, *self.memories.shape[2:])
-            # T x P -> P x T -> (P * T) x 1
-            exps.mask = self.masks.transpose(0, 1).reshape(-1).unsqueeze(1)
+        exps.obs = torch.tensor(self.obss).permute(1, 2, 0, 3). \
+            reshape(self.num_agents, -1, self.obss[0][0].shape[1])
+        if self.acmodels[0].recurrent:
+            # T x A x P x D -> A x P x T x D -> A x (P * T) x D
+            exps.memory = self.memories.permute(1, 2, 0, 3).reshape(self.num_agents, -1, *self.memories.shape[2:])
+            # T x A x P -> A x P x T -> A x (P * T) x 1
+            exps.mask = self.masks.permute(1, 2, 0).reshape(self.num_agents, -1).unsqueeze(1)
         
         # for all tensors below, T x P -> P x T -> P * T
-        exps.action = self.actions.transpose(0, 1).reshape(-1)
+        exps.action = self.actions.permute(1, 2, 0).reshape(self.num_agents, -1)
         #exps.advantage = self.advantages.transpose(0, 1).reshape(-1)
         # mod advantage already has shape P x T -> P * T
         exps.advantage = mod_advantage.reshape(-1)
         #exps.ini_values = ini_values
-        exps.log_prob = self.log_probs.transpose(0, 1).reshape(-1)
+        exps.log_prob = self.log_probs.permute(1, 2, 0).reshape(self.num_agents, -1)
         
-        # T x P x O -> P x T x O -> P * T x O
-        exps.value = self.values.transpose(0, 1).reshape(-1, *self.values.shape[2:])
-        exps.reward = self.rewards.transpose(0, 1).reshape(-1, *self.rewards.shape[2:])
+        # T x A x P x O -> A x P x T x O -> A x P * T x O
+        exps.value = self.values.permute(1, 2, 0, 3).reshape(self.num_agents, -1, *self.values.shape[3:])
+        exps.reward = self.rewards.permute(1, 2, 0, 3).reshape(self.num_agents, -1, *self.rewards.shape[3:])
         exps.returnn = exps.value + \
-            self.advantages.transpose(0, 1).reshape(-1, *self.advantages.shape[2:])
+            self.advantages.permute(1, 2, 0, 3).reshape(self.num_agents, -1, *self.advantages.shape[3:])
         # Preprocess experiences
 
-        exps.obs = torch.tensor(np.array(exps.obs), device=self.device, dtype=torch.float)
+        #exps.obs = torch.tensor(np.array(exps.obs), device=self.device, dtype=torch.float)
 
         # Log some values
 
@@ -312,10 +338,10 @@ class BaseAlgorithm:
         return exps, logs, ini_values
     
     def default_preprocess_obss(self, obss, device=None):
-        #return torch.tensor(np.array(obss), device=device, dtype=torch.float)
         t = torch.tensor(np.array(obss), device=device, dtype=torch.float)
-        t = t.reshape(-1, *t.shape[2:])
-        return t
+        tup = torch.split(t.transpose(0, 1), 1)
+        tup = tuple([tup[t].squeeze() for t in range(self.num_agents)])
+        return tup
 
     def save_models(self):
         print('... saving models ...')

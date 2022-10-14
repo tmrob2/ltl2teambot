@@ -13,10 +13,11 @@ register(
 
 # create a simple empty partially observable 8x8 grid
 env = gym.make('MA-LTL-Empty-v0')
+seed = 1234
 
 # load the ppo model
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+env.seed(seed)
 obs, info = env.reset()
 dir = '/home/thomas/ai_projects/MAS_MT_RL/mappo/tmp/ppo'
 agent = Agent(action_space=env.action_space, num_agents=2, num_tasks=2,
@@ -25,6 +26,7 @@ agent = Agent(action_space=env.action_space, num_agents=2, num_tasks=2,
 mu = torch.tensor(np.array([[0., 1.], [1., 0.]]), device=device, dtype=torch.float)
 env.update(mu.cpu().numpy())
 for _ in range(20):
+    env.seed(seed)
     observation, info = env.reset()
     while True:
         action = agent.get_action(obs)

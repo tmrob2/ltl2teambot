@@ -12,7 +12,7 @@ class LTLSimpleMAEnv(MiniGridEnv):
         room_size=6
         self.num_agents = 2
         self.m_tasks = 2
-        self.mu = None
+        self.mu = np.array([[0., 1.0], [1., 0.]])
         self.observation_space = spaces.Box(
             low=0,
             high=255,
@@ -94,7 +94,8 @@ class LTLSimpleMAEnv(MiniGridEnv):
         self.task = {i: tasks for i in range(self.num_agents)}
         self.mission = {i: str(self.task[i]) for i in range(self.num_agents)}
         self.finished_tasks = {i: [False] * len(tasks) for i in range(self.num_agents)}
-        self.agent_finished = {i: False for i in range(self.num_agents)}
+        self.finished_mission = [False] * self.m_tasks
+        #self.agent_finished = {i: False for i in range(self.num_agents)}
         self.agent_task_costs = {i: [0] * len(tasks) for i in range(self.num_agents)}
 
     def gen_obss(self):
@@ -121,9 +122,9 @@ class LTLSimpleMAEnv(MiniGridEnv):
             # The mission needs to be flat. 
             mission.flatten()
 
-            new_obs = np.concatenate((img, mission))
+            new_obs = np.concatenate((img, self.mu[i, :], mission))
 
-            obsi = np.zeros(180 + self.m_tasks * 20)
+            obsi = np.zeros(180 + self.m_tasks + self.m_tasks * 20)
             obsi[:new_obs.shape[0]] = new_obs
             obs_.append(obsi)
         return obs_
@@ -136,8 +137,8 @@ class LTLSimpleMAEnv(MiniGridEnv):
             rewards, terminated = zip(*rewards_)
             # compute the weighted cost f the agent completing this task if the agent did
             # indeed complete the task
-            sum_costs = np.sum([self.agent_task_costs[i][j] for j in range(self.num_agents)])
-            rewards = [sum_costs] + list(rewards)
+            #sum_costs = np.sum([self.agent_task_costs[i][j] for j in range(self.num_agents)])
+            #rewards = [sum_costs] + list(rewards)
             agent_rewards.append(rewards)
             agent_terminated.append(terminated)
             # return sum costs to zero
@@ -160,16 +161,18 @@ class LTLSimpleMAEnv(MiniGridEnv):
         if self.task[agent][task] == "True" or is_accomplished(self.task[agent][task]): 
             if not self.finished_tasks[agent][task]:
                 self.finished_tasks[agent][task] = True
-                self.agent_task_costs[agent][task] = \
-                    self.mu[agent, task] * (1 - 0.9 * (self.agent_step_count[agent] / self.max_steps))
+                self.finished_mission[task] = True
+                #self.agent_task_costs[agent][task] = \
+                #    self.mu[agent, task] * (1 - 0.9 * (self.agent_step_count[agent] / self.max_steps))
                 return (1, True)
             else:
                 return (0, True)
         elif self.task[task] == "False": 
             if not self.finished_tasks[agent][task]:
                 self.finished_tasks[agent][task] = True
-                self.agent_task_costs[agent][task] = \
-                    self.mu(agent, task) * (1 - 0.9 * (self.agent_step_count[agent] / self.max_steps))
+                self.finished_mission[task] = True
+                #self.agent_task_costs[agent][task] = \
+                #    self.mu(agent, task) * (1 - 0.9 * (self.agent_step_count[agent] / self.max_steps))
                 return (-1, True)
             else:
                 return (0, True)
@@ -190,16 +193,22 @@ class LTLSimpleMAEnv(MiniGridEnv):
     #            break
     #    return terminated
 
-    def check_agent_finished(self, agent_termination):
-        #full_agent_rewards = []
-        for i in range(self.num_agents):
-            if not self.agent_finished[i] and all(agent_termination[i]):
-                self.agent_finished[i] = True
-                #success = 1 - 0.9 * (self.step_count / self.max_steps)
-                #full_agent_rewards.append([success] + list(rewards[i]))
-            #else: 
-            #    full_agent_rewards.append([0.] + list(rewards[i]))
-        #return full_agent_rewards
+    #def check_agent_finished(self, agent_termination):
+    #    #full_agent_rewards = []
+    #    for i in range(self.num_agents):
+    #        if not self.agent_finished[i] and all(agent_termination[i]):
+    #            self.agent_finished[i] = True
+    #            #success = 1 - 0.9 * (self.step_count / self.max_steps)
+    #            #full_agent_rewards.append([success] + list(rewards[i]))
+    #        #else: 
+    #        #    full_agent_rewards.append([0.] + list(rewards[i]))
+    #    #return full_agent_rewards
+
+    def mission_reward(self, reward, terminated):
+        if terminated:
+            return [[1-0.9 * self.agent_step_count[i] / self.max_steps] + list(r) for i, r in enumerate(reward)]
+        else:
+            return [[0.] + list(r) for r in reward]
 
     def step(self, action):
         obs, reward, _, truncated, info = super().step(action)
@@ -210,11 +219,12 @@ class LTLSimpleMAEnv(MiniGridEnv):
 
         #print("agent pos: ", [x.cur_pos for x in self.agents], "mission", self.mission, "task", self.task)
 
-        reward, terminated_ = self.rewards()
+        reward, _ = self.rewards()
 
-        self.check_agent_finished(terminated_)
-        terminated = [self.agent_finished[i] for i in range(self.num_agents)]
-        truncated_ = [truncated for _ in range(self.num_agents)]
+        terminated_ = True if all(self.finished_mission) else False
+        reward = self.mission_reward(reward, terminated_)
+        terminated = [terminated_] * self.num_agents
+        truncated_ = [truncated] * self.num_agents
 
         return obs, reward, terminated, truncated_, info
 

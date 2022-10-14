@@ -1,6 +1,8 @@
 import teamgrid
 from gym import register
 import gym
+import numpy as np
+import torch
 
 register(
     'MA-LTL-Empty-v0', 
@@ -15,14 +17,13 @@ TEST: Testing initial environment setup\n
 """
 )
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+mu = torch.tensor(np.array([[0.1, 0.9], [0.9, 0.1]]), device=device, dtype=torch.float)
 env = gym.make('MA-LTL-Empty-v0')
-
+env.update(mu.cpu().numpy())
 obs, _ = env.reset()
 
 print("obs\n", obs)
-
-import numpy as np
-import torch
 
 num_frames_per_proc = 128
 num_tasks = 2
@@ -31,7 +32,6 @@ num_procs = 5
 
 arr = np.array(obs)
 print("np arr shape", arr.shape)
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 t = torch.tensor(arr, dtype=torch.float, device=device)
 print("tensor shape", t.shape)
 
@@ -41,7 +41,6 @@ print("tensor shape", t.shape)
 #    device=device
 #)
 
-mu = torch.tensor(np.array([[0.1, 0.9], [0.9, 0.1]]), device=device, dtype=torch.float)
 
 print(
 """
