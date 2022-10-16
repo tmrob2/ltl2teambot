@@ -9,6 +9,8 @@ register(
     entry_point='mappo.envs:LTLSimpleMAEnv',
 )
 
+torch.autograd.set_detect_anomaly(True)
+
 print(
 """
 ---------------------------------------\n
@@ -57,19 +59,20 @@ print("device", coma.device)
 
 print("observation shape", np.array(obs).shape)
 
-# sample some actions
-actions = [env.action_space.sample() for _ in range(num_agents)]
-actions = torch.tensor(np.array(actions), device=device, dtype=torch.float)
-#agent_id = torch.tensor(np.array([1]), device=device, dtype=torch.float)
-coma.episode_memory.observations.append(obs)
-pi, actions, memory = coma.act(obs)
-next_obs, reward, done, trunc, _ = coma.env.step(actions.cpu().numpy())
-coma.episode_memory.pi.append(pi)
-coma.episode_memory.actions.append(actions)
-coma.episode_memory.reward.append(reward)
-coma.episode_memory.memories.append(memory)
+## sample some actions
+#actions = [env.action_space.sample() for _ in range(num_agents)]
+#actions = torch.tensor(np.array(actions), device=device, dtype=torch.float)
+##agent_id = torch.tensor(np.array([1]), device=device, dtype=torch.float)
+#coma.episode_memory.observations.append(obs)
+##pi, actions, memory = coma.act(obs)
+#coma.act(obs)
+#next_obs, reward, done, trunc, _ = coma.env.step(actions.cpu().numpy())
+#coma.episode_memory.reward.append(reward)
+##coma.episode_memory.memories.append(memory)
+#
+##obs, actions, pi, rewards, done, memory = coma.episode_memory.get_memory()
+#obs, actions, pi, rewards, done, _ = coma.episode_memory.get_memory()
 
-obs, actions, pi, rewards, done, memory = coma.episode_memory.get_memory()
 
 print(
 """
@@ -79,32 +82,34 @@ TEST: Test the Critic network\n
 """
 )
 
-epsisode_lenth = obs.shape[0]
 
 t = 0
 
-ini_values = coma.get_ini_values()
-
-for i in range(num_agents):
-    agent_id = torch.tensor(np.array([i]), device=coma.device, dtype=torch.float)
-    H = coma.computeH(ini_values, mu, i, c, e).detach()
-    qt_target, coma.cmem = coma.critic(obs[t], actions[t], agent_id, coma.cmem)
-    qt_target = qt_target.detach()
-
-    action_taken = actions.type(torch.long)[t][i] # should be a scalar  
-    baseline = torch.sum(pi[t][i].unsqueeze(1) * qt_target).detach()
-
-    qt_taken_target = qt_target[action_taken]
-    advantage = qt_taken_target - baseline  # should all be multi-objective
-
-    mod_advantage = torch.matmul(advantage, H)
-
-    # multiply advantage by H
-
-    log_pi = torch.log(pi[t][i] * mod_advantage)
-
-# when the episode is computed then calculate actor loss and critic loss
-        
+#ini_values = coma.get_ini_values()
+#obs = obs[t].reshape(1, obs.shape[2] * num_agents)
+#
+#for i in range(num_agents):
+#    agent_id = (torch.ones(1, device=device) * i).view(-1, 1)
+#    H = coma.computeH(ini_values, mu, i, c, e).detach()
+#    #qt_target, coma.cmem = coma.critic(obs[t], actions[t], agent_id, coma.cmem)
+#    qt_target = coma.critic(obs, actions[t].unsqueeze(0), agent_id)
+#    qt_target = qt_target.detach()
+#
+#    action_taken = actions.type(torch.long)[t][i] # should be a scalar  
+#    baseline = torch.sum(pi[t][i].unsqueeze(1) * qt_target).detach()
+#
+#    qt_taken_target = qt_target[:, action_taken, :].squeeze()
+#    advantage = qt_taken_target - baseline  # should all be multi-objective
+#
+#    mod_advantage = torch.matmul(advantage, H)
+#
+#    # multiply advantage by H
+#
+#    log_pi = torch.log(pi[t][i] * mod_advantage)
+#
+## when the episode is computed then calculate actor loss and critic loss
+#        
+#coma.episode_memory.clear()
 
 print(
 """
@@ -114,9 +119,7 @@ TEST: Collect a COMA episode\n
 """
 )
 
-exps = coma.collect_episode_trajectory(seed=1234)
-
-print("agent 0 observations shape", exps[0].observations.shape)
+coma.collect_episode_trajectory(seed=1234)
 
 
 print(
@@ -127,4 +130,4 @@ TEST: Test one COMA training step\n
 """
 )
 
-coma.train(exps, mu.detach(), c, e)
+coma.train(mu.detach(), c, e)

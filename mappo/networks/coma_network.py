@@ -18,26 +18,39 @@ def init_params(m):
 class EpisodeMemory:
     def __init__(self, num_agents, num_actions, device=None):
         self.num_agents = num_agents
-        self.num_agents = num_actions
+        self.num_actions = num_actions
         self.device = device
 
+        self.observations = []
+        self.actions = []
+        self.pi = [[] for _ in range(self.num_agents)]
+        self.reward = []
+        self.done = []
+        self.trunc = []
+        #self.log_probs = []
+        #self.memories = []
+
+    def get_memory(self):
+
+        actions = torch.tensor(self.actions, device=self.device, dtype=torch.float)
+        pi = []
+        for i in range(self.num_agents):
+            pi.append(torch.cat(self.pi[i]).view(len(self.pi[i]), self.num_actions))
+        rewards = torch.tensor(np.array(self.reward), device=self.device)
+        done = torch.tensor(np.array(self.done), device=self.device)
+        #memory = torch.stack(self.memories)
+        trunc = torch.tensor(np.array(self.trunc), device=self.device)
+        observations = self.observations
+        return observations, actions, pi, rewards, done, trunc #, memory
+
+    def clear(self):
         self.observations = []
         self.actions = []
         self.pi = []
         self.reward = []
         self.done = []
-        self.memories = []
-
-    def get_memory(self):
-
-        actions = torch.stack(self.actions)
-        observations = torch.tensor(np.array(self.observations), device=self.device, dtype=torch.float)
-        pi = torch.stack(self.pi)
-        rewards = torch.tensor(np.array(self.reward), device=self.device)
-        done = torch.tensor(np.array(self.done), device=self.device)
-        memory = torch.stack(self.memories)
-
-        return observations, actions, pi, rewards, done, memory
+        self.trunc = []
+        #self.log_probs = []
 
 
 class Actor(nn.Module):
@@ -69,7 +82,7 @@ class Actor(nn.Module):
         self.num_tasks = num_tasks
 
         # Define memory
-        self.memory_rnn = nn.LSTMCell(self.image_embedding_size, self.semi_memory_size)
+        #self.memory_rnn = nn.LSTMCell(self.image_embedding_size, self.semi_memory_size)
 
         self.ltl_embedder = nn.Embedding(20, 8, padding_idx=0)
         self.ltl_rnn = nn.GRU(8, 32, num_layers=2, bidirectional=True, batch_first=True)
@@ -95,7 +108,7 @@ class Actor(nn.Module):
     def semi_memory_size(self):
         return self.image_embedding_size
 
-    def forward(self, obs, memory=None):
+    def forward(self, obs):#, memory=None):
         img = obs[:, :147]  # Observation of the env
         task = obs[:, 147:147 + self.num_tasks] # Task allocation
         ltl = obs[: , 147 + self.num_tasks:] # Progression of the task
@@ -106,12 +119,12 @@ class Actor(nn.Module):
         x = x.reshape(x.shape[0], -1)
 
         #if self.use_memory:
-        hidden = (memory[:, :self.semi_memory_size], memory[:, self.semi_memory_size:])
-        hidden = self.memory_rnn(x, hidden)
-        embedding = hidden[0]
-        memory = torch.cat(hidden, dim=1)
+        #hidden = (memory[:, :self.semi_memory_size], memory[:, self.semi_memory_size:])
+        #hidden = self.memory_rnn(x, hidden)
+        #embedding = hidden[0]
+        #memory = torch.cat(hidden, dim=1)
         #else:
-        #    embedding = x
+        embedding = x
 
         embedded_formula = self.ltl_embedder(ltl.to(torch.long))
         _, h = self.ltl_rnn(embedded_formula)
@@ -120,9 +133,9 @@ class Actor(nn.Module):
         composed_x = torch.cat([embedding, task, embedded_formula], dim=1)
 
         x = self.actor(composed_x)
-        dist = F.log_softmax(x, dim=1)
+        dist = F.softmax(x, dim=1)
 
-        return dist, memory 
+        return dist #, memory 
 
 class Critic(nn.Module):
     def __init__(
@@ -141,7 +154,8 @@ class Critic(nn.Module):
         self.n, self.m = partial_obs_dims
         self.image_embedding_size = ((self.n-1)//2-2)*((self.m-1)//2-2)*64
         self.num_tasks = num_tasks
-        self.embedding_size = (self.semi_memory_size + self.num_tasks + 32 * 2) * num_agents + num_agents + 1
+        self.num_agents = num_agents
+        self.embedding_size = (self.semi_memory_size + self.num_tasks + 32 * 2) + num_agents + 1
         self.n_actions = n_actions
         self.objectives = num_tasks + 1
 
@@ -156,7 +170,8 @@ class Critic(nn.Module):
         )
 
         # Define memory
-        self.memory_rnn = nn.LSTMCell(self.image_embedding_size, self.semi_memory_size)
+        #self.memory_rnn = nn.LSTMCell(self.image_embedding_size, self.semi_memory_size)
+        
 
         self.ltl_embedder = nn.Embedding(20, 8, padding_idx=0)
         self.ltl_rnn = nn.GRU(8, 32, num_layers=2, bidirectional=True, batch_first=True)
@@ -178,27 +193,28 @@ class Critic(nn.Module):
     def semi_memory_size(self):
         return self.image_embedding_size
 
-    def forward(self, input, actions, agent_id, memory=None):
+    def forward(self, input, actions, agent_id): #, memory=None):
         
         img = input[:, :147]  # Observation of the env
         task = input[:, 147:147 + self.num_tasks] # Task allocation
         ltl = input[: , 147 + self.num_tasks:] # Progression of the task
 
-        num_agents = input.shape[0]
+        batch_size = input.shape[0]
 
         ##### ENV RECOGNITION LAYERS #####
         #x = img.transpose(1, 3).transpose(2, 3)
         # The img shape is A x (7, 7)
         x = img.reshape(-1, self.n, self.m, 3).permute(0, 3, 1, 2)
         x = self.image_conv(x)
-        x = x.reshape(num_agents, -1)
+        x = x.reshape(batch_size, -1)
         
         ##### MEMORY LAYERS #####
         #if self.use_memory:
-        hidden = (memory[:, :self.semi_memory_size], memory[:, self.semi_memory_size:])
-        hidden = self.memory_rnn(x, hidden)
-        embedding = hidden[0]
-        memory = torch.cat(hidden, dim=1)
+        #hidden = (memory[:, :self.semi_memory_size], memory[:, self.semi_memory_size:])
+        #hidden = self.memory_rnn(x, hidden)
+        #embedding = hidden[0]
+        #memory = torch.cat(hidden, dim=1)
+        embedding = x
         
         ##### TASK PROGRESS LAYERS #####
         embedded_formula = self.ltl_embedder(ltl.to(torch.long))
@@ -208,14 +224,14 @@ class Critic(nn.Module):
         # In the composed layer we want to flatten everything, so that
         # we have
         
-        composed_x = torch.cat([embedding, task, embedded_formula], dim=1).reshape(-1)
-        joint_state_action = torch.cat([agent_id, composed_x, actions])
+        composed_x = torch.cat([embedding, task, embedded_formula], dim=1)
+        joint_state_action = torch.cat([agent_id, composed_x, actions], dim=1) 
 
 
         x = self.critic(joint_state_action)
-        value = x.reshape(self.n_actions, self.objectives)
+        value = x.reshape(batch_size, self.n_actions, self.objectives)
 
-        return value, memory
+        return value #, memory
 
     def save_models(self):
         print('... saving models ...')
@@ -227,21 +243,42 @@ class Critic(nn.Module):
 
 
 class COMA:
-    def __init__(self, num_agents, action_space, num_tasks, env, device=None):
+    def __init__(
+            self, 
+            num_agents, 
+            action_space, 
+            num_tasks, 
+            env, 
+            device=None,
+            lr_a = 0.001, 
+            lr_c = 0.001,
+            gamma = 0.95,
+            target_update_steps=10
+        ):
         self.num_agents = num_agents
         self.device = device
         self.env = env
+        self.target_update_steps = target_update_steps
 
         self.agents = [Actor(action_space, num_tasks, name=f"agent{i}", device=self.device) for i in range(num_agents)] 
-        self.amem = [torch.zeros(1, self.agents[i].memory_size, device=self.device) for i in range(num_agents)]
+        #self.amem =  [torch.zeros(1, self.agents[i].memory_size, device=self.device) for i in range(num_agents)]
+        self.actor_optimisers = [torch.optim.Adam(self.agents[i].parameters(), lr=lr_a) for i in range(num_agents)]
 
         self.critic = Critic(num_agents, num_tasks, action_space.n)
         self.critic.to(device)
-        self.cmem = torch.zeros(num_agents, self.critic.memory_size, device=device, dtype=torch.float)
+        self.critic_optimiser = torch.optim.Adam(self.critic.parameters(), lr=lr_c)
+
+        self.critic_target = Critic(num_agents, num_tasks, action_space.n)
+        self.critic_target.to(device)
+        self.critic_target.load_state_dict(self.critic.state_dict())
+        #self.cmem = torch.zeros(num_agents, self.critic.memory_size, device=device, dtype=torch.float)
 
         self.episode_memory = EpisodeMemory(num_agents, action_space.n, self.device)
 
         self.frames = 0
+        self.count_steps = 0
+        self.gamma = gamma
+        self.objectives = num_tasks + 1
 
     def reset(self, seed=None):
         if seed:
@@ -251,73 +288,68 @@ class COMA:
 
     def act(self, observation):
         # observation is already a list
-        pi = []; actions = []
         observation = np.array(observation)
+        actions = []
         for i in range(self.num_agents):
             obs = self.preprocess_obs(observation[i])
-            dist, self.amem[i] = self.agents[i](obs, self.amem[i])
+            #dist, self.amem[i] = self.agents[i](obs) #, self.amem[i])
+            dist = self.agents[i](obs) #, self.amem[i])
             action = Categorical(dist).sample()
-            pi.append(dist); actions.append(action)
-        pi = torch.cat(pi)
-        actions = torch.cat(actions)
-        memory = torch.cat(self.amem)
-        return pi, actions, memory
+            self.episode_memory.pi[i].append(dist)
+            actions.append(action.item())
+        self.episode_memory.actions.append(actions)
+        self.episode_memory.observations.append(
+            torch.tensor(observation, device=self.device, dtype=torch.float)
+        )
+        return actions
 
     def collect_episode_trajectory(self, seed=None):
         episode_done = False
         obs, _ = self.reset(seed)
         while not episode_done:
-            pi, actions, memory = self.act(obs)
+            #pi, actions, memory = self.act(obs)
+            actions = self.act(obs)
 
-            next_obs, reward, done, trunc, _ = self.env.step(actions.cpu().numpy())
-            self.episode_memory.observations.append(next_obs)
-            self.episode_memory.actions.append(actions)
+            next_obs, reward, done, trunc, _ = self.env.step(np.array(actions))
+
             self.episode_memory.reward.append(reward)
             self.episode_memory.done.append(done)
-            self.episode_memory.pi.append(pi)
-            self.episode_memory.memories.append(memory)
+            self.episode_memory.trunc.append(trunc)
+            #self.episode_memory.memories.append(memory)
             self.frames += 1
             obs = next_obs
 
             if all(done) or all(trunc):
                 # the episode is finished
                 break
-        return self.create_experiences()
-
-    def create_experiences(self):
-        observations, actions, pi, rewards, done, memory = \
-            self.episode_memory.get_memory()
-        exps = DictList()
-        # Tranpose the outputs so that the agent is 0th index
-        exps.observations = observations.transpose(0, 1)
-        exps.actions = actions.transpose(0, 1)
-        exps.pi = pi.transpose(0, 1)
-        exps.rewards = rewards.transpose(0, 1)
-        exps.done = done.transpose(0, 1)
-        exps.memory = memory.transpose(0, 1)
-        return exps
 
     def preprocess_obs(self, obs):
         t = torch.tensor(obs, device=self.device, dtype=torch.float).unsqueeze(0)
         return t
 
-    def get_ini_values(self):
+    def process_observations(self, observations, batch_size, state_size):
+        observations = torch.stack(observations).view(batch_size, state_size * self.num_agents)
+        return observations
+
+    def get_ini_values(self, obs, actions, pi):
         # get the critic value for the initial observations
-        obs, actions, pi, _, _, _ = self.episode_memory.get_memory()
+
+        obs = obs[0].unsqueeze(0)
         ini_values = []
         with torch.no_grad():
             for i in range(self.num_agents):
-                agent_id = torch.tensor(np.array([i]), device=self.device, dtype=torch.float)
-                qtarget, self.cmem = self.critic(obs[0], actions[0], agent_id, self.cmem)
-                v_ini_i = torch.sum(pi[0][i].unsqueeze(1) * qtarget, dim=0)
+                agent_id = (torch.ones(1, device=self.device) * i).view(-1, 1)
+                #qtarget, self.cmem = self.critic(obs[0], actions[0], agent_id, self.cmem)
+                qtarget = self.critic(obs, actions[0].unsqueeze(0), agent_id)
+                v_ini_i = torch.sum(pi[0][i].unsqueeze(1) * qtarget, dim=1)
                 ini_values.append(v_ini_i)
-        return torch.stack(ini_values).detach() # A x O
+        return torch.stack(ini_values).squeeze() # A x O
 
     def df(self, x, c):
         return torch.where(x <= c, 2 * (c - x), 0.0)
 
     def dh(self, x, e):
-        return torch.where(x<= e, 2 * (e - x), 0.0)
+        return torch.where(x <= e, 2 * (e - x), 0.0)
 
     def computeH(self, X, mu, agent, c, e):
         _, y = X.shape
@@ -331,21 +363,77 @@ class COMA:
         H = torch.stack(H_)
         return H
 
-    def train(self, exps, mu, c, e):
-        # TODO try batch first, if  this works use this otherwise use 
-        # a for loop 
-        ini_values = self.get_ini_values()
+    def train(self, mu, c, e):
+
+        observations, actions, pi, rewards, done, trunc  = self.episode_memory.get_memory()
+        batch_size = len(observations)
+        observations = self.process_observations(
+            observations, len(observations), observations[0].shape[1]
+        )
+        ini_values = self.get_ini_values(observations, actions, pi).detach()
         for agent in range(self.num_agents):
             H = self.computeH(ini_values, mu, agent, c, e)
-            batch_size = len(exps[agent].observations)
-            ids = (torch.ones(batch_size) * agent).view(-1, 1)
-            Q_target, self.cmem = self.critic(
-                exps[agent].observations, exps[agent].actions, ids, self.cmem)
-            Q_target = Q_target.detach()
+            ids = (torch.ones(batch_size, device=self.device) * agent).view(-1, 1)
+            #obs = observations.transpose(0, 1).reshape(batch_size, -1)
+            Q_target = self.critic_target(observations, actions, ids).detach()
 
-            action_taken = exps[agent].type(torch.long)[:, agent].reshape(-1, 1)
+            action_taken = actions.type(torch.long)[:, agent].reshape(-1, 1)
 
-            #baseline = torch.sum(exps[agent].pi * )
+            baseline = torch.sum(pi[agent].unsqueeze(2) * Q_target, dim=1).detach()
+            Q_taken_target = torch.stack(
+                [torch.gather(Q_target[:, :, 0], dim=1, index=action_taken).squeeze() 
+                for _ in range(Q_target.shape[2])]
+            ).transpose(0, 1)
+            advantage = Q_taken_target - baseline
+            mod_advantage = torch.matmul(advantage, H)
+
+            log_pi = torch.log(torch.gather(pi[agent], dim=1, index=action_taken).squeeze())
+
+            actor_loss = -torch.mean(log_pi * mod_advantage)
+
+            self.actor_optimisers[agent].zero_grad()
+            actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.agents[agent].parameters(), 5)
+            self.actor_optimisers[agent].step()
+
+            ########################
+            # Train the critic
+            ########################
+
+            Q = self.critic(observations, actions, ids)
+
+            #action_taken = exps.actions.type(torch.long)[agent, :].reshape(-1, 1)
+            Q_taken = torch.stack(
+                [torch.gather(Q[:, :, 0], dim=1, index=action_taken).squeeze() 
+                for _ in range(Q.shape[2])]
+            ).transpose(0, 1)
+
+            # TD(0)
+            r = torch.zeros(batch_size, self.objectives, device=self.device)
+            for t in range(batch_size):
+                if done[t][agent] or trunc[t][agent]:
+                    r[t] = rewards[t][agent]
+                else:
+                    r[t] = rewards[t][agent] + self.gamma * Q_taken_target[t + 1]
+
+            critic_loss = torch.mean((r - Q_taken) ** 2)
+
+            self.critic_optimiser.zero_grad()
+            critic_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 5)
+            self.critic_optimiser.step()
+
+        if self.count_steps == self.target_update_steps:
+            self.critic_target.load_state_dict(self.critic.state_dict())
+            self.count_steps = 0
+        else:
+            self.count_steps += 1
+        
+        self.episode_memory.clear()
+
+
+
+
             
 
 
