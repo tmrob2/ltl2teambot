@@ -83,7 +83,7 @@ class BaseAlgorithm:
         [self.acmodels[i].train() for i in range(num_agents)]
 
         self.num_procs = len(envs)
-        self.num_frames = self.num_frames_per_proc * self.num_procs * self.num_agents
+        self.num_frames = self.num_frames_per_proc * self.num_procs
 
         shape = (self.num_frames_per_proc, self.num_agents, self.num_procs)
         mo_shape = (self.num_frames_per_proc, self.num_agents, self.num_procs, self.num_objectives)
@@ -117,6 +117,8 @@ class BaseAlgorithm:
         #self.log_reshaped_return = [[] for _ in range(self.num_agents)]
         self.log_num_frames = [0] * self.num_procs * self.num_agents
 
+    def update_environments(self, mu):
+        self.env.update(mu)
 
     def collect_experiences(self, mu, c, e):
         """Collects rollouts and computes advantages.
@@ -193,8 +195,6 @@ class BaseAlgorithm:
             self.log_episode_num_frames += \
                 torch.ones(self.num_agents, self.num_procs, device=self.device)
 
-            reshaped_log_episode_return = \
-                self.log_episode_return.reshape(self.num_procs, self.num_agents, self.num_objectives)
             reshaped_log_epsisode_frames = \
                 self.log_episode_num_frames.reshape(self.num_procs, self.num_agents)
             for agent, done_ in enumerate(done):
@@ -203,9 +203,9 @@ class BaseAlgorithm:
                         # TODO: the issue is that one agent finishes and the other continues
                         # diluting the value of the agent which finished earlier
                         #self.log_total_done_counter += 1
-                        if torch.count_nonzero(reshaped_log_episode_return[i, agent]) > 0:
+                        if torch.count_nonzero(self.log_episode_return[agent, i]) > 0:
                             self.log_done_counter[agent] += 1
-                            self.log_return[agent].append(reshaped_log_episode_return[i, agent].cpu().numpy())
+                            self.log_return[agent].append(self.log_episode_return[agent, i].cpu().numpy())
                             #self.log_return.append(self.log_episode_return[i].cpu().numpy())
                             #self.log_reshaped_return.append(self.log_episode_reshaped_return[i].cpu().numpy())
                             self.log_num_frames.append(reshaped_log_epsisode_frames[i][0].item())
@@ -240,14 +240,13 @@ class BaseAlgorithm:
                     next_value[agent] * next_mask[agent].unsqueeze(1) - self.values[i][agent]
                 advantage = delta + self.discount * self.gae_lambda * next_advantage[agent] * next_mask[agent].unsqueeze(1)
                 advantages.append(advantage)
-            self.advantages[i] = torch.cat(advantages).reshape(self.num_agents, self.num_procs, self.num_objectives)
+            self.advantages[i] = torch.stack(advantages)
 
 
         # Modify the advantage with the task allocation parameters
 
-        ini_values = torch.reshape(self.values.transpose(0, 1), 
-            (self.num_procs, self.num_agents, self.num_frames_per_proc, self.num_objectives))[:, :, 0, :]
-        
+        ini_values = self.values[0]
+        # ini values has shape A x P x O
 
         # Compute H
         H = []
@@ -279,19 +278,19 @@ class BaseAlgorithm:
         # The dimension of the experiences should be A x (P * T)
         
         exps = DictList()
-        exps.obs = torch.tensor(self.obss).permute(1, 2, 0, 3). \
+        exps.obs = torch.tensor(np.array(self.obss), device=self.device, dtype=torch.float).permute(1, 2, 0, 3). \
             reshape(self.num_agents, -1, self.obss[0][0].shape[1])
         if self.acmodels[0].recurrent:
             # T x A x P x D -> A x P x T x D -> A x (P * T) x D
-            exps.memory = self.memories.permute(1, 2, 0, 3).reshape(self.num_agents, -1, *self.memories.shape[2:])
+            exps.memory = self.memories.permute(1, 2, 0, 3).reshape(self.num_agents, -1, *self.memories.shape[3:])
             # T x A x P -> A x P x T -> A x (P * T) x 1
-            exps.mask = self.masks.permute(1, 2, 0).reshape(self.num_agents, -1).unsqueeze(1)
+            exps.mask = self.masks.permute(1, 2, 0).reshape(self.num_agents, -1).unsqueeze(2)
         
-        # for all tensors below, T x P -> P x T -> P * T
+        # for all tensors below, T x A x P -> A x P x T -> A x P * T
         exps.action = self.actions.permute(1, 2, 0).reshape(self.num_agents, -1)
         #exps.advantage = self.advantages.transpose(0, 1).reshape(-1)
-        # mod advantage already has shape P x T -> P * T
-        exps.advantage = mod_advantage.reshape(-1)
+        # mod advantage already has shape A x P * T
+        exps.advantage = mod_advantage
         #exps.ini_values = ini_values
         exps.log_prob = self.log_probs.permute(1, 2, 0).reshape(self.num_agents, -1)
         
@@ -374,11 +373,11 @@ class BaseAlgorithm:
         # todo need to loop over each environment
         _, _, y = X.shape
         H_ = [] 
-        H_.append(2.0 * self.df(X[:, agent, 0], c))
+        H_.append(2.0 * self.df(X[agent, :, 0], c))
         for j in range(1, y):
             #print(X[:, k, j - 1])
             H_.append(
-                self.dh(torch.sum(mu[:, j - 1].unsqueeze(1) * X.transpose(1, 0)[:, :, j], dim=0), e) \
+                self.dh(torch.sum(mu[:, j - 1].unsqueeze(1) * X[:, :, j], dim=0), e) \
                     * mu[agent, j - 1]
             )
 

@@ -78,40 +78,9 @@ class ParallelEnv(gym.Env):
     def render(self):
         raise NotImplementedError
 
-#def encode_mission(mission):
-#    try:
-#        syms = "AONGUXE[]rgb"
-#        V = {k: v+1 for v, k in enumerate(syms)}
-#        return [V[e] for e in mission if e not in ["\'", ",", " "]]   
-#    except Exception as e:
-#        print(e) 
-
-#def get_obss_preprocessor(obs_space):
-#    # Check if obs_space is an image space
-#    if isinstance(obs_space, gym.spaces.Box):
-#        obs_space = {"image": obs_space.shape}
-#
-#        def preprocess_obss(obss, device=None):
-#            return DictList({
-#                "image": preprocess_images(obss, device=device)
-#            })
-#
-#    return obs_space, preprocess_obss
-
-
-#def preprocess_images(images, device=None):
-#    # Bug of Pytorch: very slow if not first converted to numpy array
-#    images = np.array(images)
-#    return torch.tensor(images, device=device, dtype=torch.float)
-
-
-#def preprocess_texts(texts, device=None):
-#    encoded_mission = np.array(encode_mission(texts))
-#    return torch.tensor(encoded_mission, device=device, dtype=torch.long)
-
 
 def make_env(env_key, seed=None):
-    env = gym.make(env_key)
+    env = gym.make(env_key, disable_env_checker=True)
     if seed:
         env.seed(seed)
     env.reset()

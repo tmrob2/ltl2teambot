@@ -1,5 +1,5 @@
-from mappo.algorithms.ma_mo_ppo import PPO
-from mappo.algorithms.ma_mo_base import compute_alloc_loss
+from mappo.algorithms.dec_ma_mo_ppo import PPO
+from mappo.algorithms.dec_ma_mo_base import compute_alloc_loss
 import teamgrid
 import gym
 from gym import register
@@ -27,7 +27,7 @@ writer = SummaryWriter()
 
 num_procs = 10
 num_frames_per_proc = 128
-num_frames = num_frames_per_proc * num_procs
+#num_frames = num_frames_per_proc * num_procs
 num_tasks = 2
 num_agents = 2
 env = ""
@@ -44,11 +44,13 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 #obs_space, preprocess_obs = get_obss_preprocessor(envs[0].observation_space)
 
-model = AC_MA_MO_LTL_Model(envs[0].action_space, 2, use_memory=True)
-if load_model:
-    model.load_models()
-model.to(device)
+models = []
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+for i in range(num_agents):
+    models.append(AC_MA_MO_LTL_Model(envs[0].action_space, 2, use_memory=True, name=f"agent{i}"))
+for i in range(num_agents):
+    models[i].to(device)
 # we have to instantiate mu quite early because it will be used to compute
 # the task weighted rewards in the environment
 #mu = torch.tensor(
@@ -59,11 +61,13 @@ model.to(device)
 
 # we also need the loss function for updating kappa
 lr2 = 0.01
-kappa = torch.ones(num_agents, num_tasks, device=device, dtype=torch.float).requires_grad_()
+#kappa = torch.ones(num_agents, num_tasks, device=device, dtype=torch.float).requires_grad_()
 #mu = torch.tensor(np.array([[0., 1.], [1., 0.]]), device=device, dtype=torch.float)
-alloc_layer = torch.nn.Softmax(dim=0)
-mu = alloc_layer(kappa)
-ppo = PPO(envs, model, num_agents, num_tasks + 1, device, mu=mu.detach().cpu().numpy(), seed=seed)
+#alloc_layer = torch.nn.Softmax(dim=0)
+#mu = alloc_layer(kappa)
+mu = torch.tensor(np.array([[1.0, 0.], [0., 1.0]]), device=device, dtype=torch.float)
+ppo = PPO(envs, models, num_agents, num_tasks + 1, device, mu=mu.detach().cpu().numpy(), seed=seed)
+ppo.update_environments(mu.detach().cpu().numpy())
 
 txt_logger = get_txt_logger()
 model_dir = '/home/thomas/ai_projects/MAS_MT_RL/mappo/tmp/ppo'
@@ -72,24 +76,24 @@ frames = 10000000  #status["num_frames"]
 update = 0 # status["update"]
 num_frames = 0
 start_time = time.time()
-best_score = 0.
+best_score = [0.] * num_agents
 #best_scores = [[0.] * (num_tasks + 1)] * num_agents
 score_history = deque(maxlen=100)
 np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)})
 
-while num_frames < frames and best_score < 0.95:#any(i < 0.95 for a in best_scores for i in a):
+while num_frames < frames and any(x < 0.95 for x in best_score):#any(i < 0.95 for a in best_scores for i in a):
     # Update model parameters
 
     update_start_time = time.time()
     exps, logs1, ini_values = ppo.collect_experiences(mu.detach(), 0.95, 0.95)
 
     # compute the task allocation loss
-    alloc_loss = compute_alloc_loss(ini_values, mu, 0.95)
-    alloc_loss.backward()
-    kappa.data -= lr2 * kappa.grad.data
-    kappa.grad = None
+    #alloc_loss = compute_alloc_loss(ini_values, mu, 0.95)
+    #alloc_loss.backward()
+    #kappa.data -= lr2 * kappa.grad.data
+    #kappa.grad = None
     # Get the new mu
-    mu = alloc_layer(kappa)
+    #mu = alloc_layer(kappa)
     logs2 = ppo.update_parameters(exps)
     logs = {**logs1, **logs2}
     #print(logs)
@@ -109,14 +113,12 @@ while num_frames < frames and best_score < 0.95:#any(i < 0.95 for a in best_scor
         
         # for each agent check the progress against the recorded best score
         #batch_score = np.mean(return_per_episode['mean'])
-
-        output = np.array(return_per_episode['mean'])
-        average_cost = np.mean(output[:, 0])
-        average_task_score = np.mean(mu.detach().cpu().numpy() * output[:, 1:])
-        batch_score = np.mean([average_cost, average_task_score])
-        if batch_score > best_score:
-            best_score = batch_score
-            model.save_models()
+        
+        output = np.mean(return_per_episode['mean'], 1)
+        for agent in range(num_agents):
+            if output[agent] > best_score[agent]:
+                best_score[agent] = output[agent]
+                models[agent].save_models()
         #for i in range(num_agents):
         ##if any(x > best_scores[i][k]  for k, x in enumerate(return_per_episode['mean'][i])):
         ##    best_scores[i] = return_per_episode['mean'][i]

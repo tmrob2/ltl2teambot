@@ -116,7 +116,9 @@ class BaseAlgorithm:
         self.log_return = [[np.zeros(3)] * self.num_procs for _ in range(self.num_agents)]
         #self.log_reshaped_return = [[] for _ in range(self.num_agents)]
         self.log_num_frames = [0] * self.num_procs * self.num_agents
-
+    
+    def update_environments(self, mu):
+        self.env.update(mu)
 
     def collect_experiences(self, mu, c, e):
         """Collects rollouts and computes advantages.

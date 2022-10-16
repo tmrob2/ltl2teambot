@@ -12,7 +12,7 @@ class LTLSimpleMAEnv(MiniGridEnv):
         room_size=6
         self.num_agents = 2
         self.m_tasks = 2
-        self.mu = np.array([[0., 1.0], [1., 0.]])
+        self.mu = np.array([[0.5, 0.5], [0.5, 0.5]])
         self.observation_space = spaces.Box(
             low=0,
             high=255,

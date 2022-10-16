@@ -27,12 +27,13 @@ class AC_MA_MO_LTL_Model(nn.Module, RecurrentACModel):
         partial_obs_dims = (7, 7),
         use_memory=False, 
         use_text=False,
-        chkpt_file="tmp/ppo"
+        chkpt_file="tmp/ppo",
+        name=""
         ):
         super().__init__()
 
         self.checkpoint_file = \
-            "/home/thomas/ai_projects/MAS_MT_RL/mappo/tmp/ppo/ma_mo_actor_torch_ppo"
+            f"/home/thomas/ai_projects/MAS_MT_RL/mappo/tmp/ppo/ma_mo_actor_torch_ppo_{name}"
         #os.path.join(chkpt_file, 'mo_actor_torch_ppo')
 
         # Decide which components are enabled

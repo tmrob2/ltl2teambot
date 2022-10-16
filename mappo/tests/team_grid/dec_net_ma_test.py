@@ -96,7 +96,18 @@ base = BaseAlgorithm(envs, models, device, num_agents, num_tasks + 1,
     128, 0.99, 0.001, 0.95, 0.01, 0.5, 0.5, 4, None, mu.cpu().numpy()
 )
 
-base.collect_experiences(mu, 0.95, 0.95)
+exps, logs1, ini_values = base.collect_experiences(mu, 0.95, 0.95)
+
+from mappo.algorithms.dec_ma_mo_ppo import PPO
+
+ppo = PPO(envs, models, num_agents, num_tasks + 1, device, mu=mu.cpu().numpy())
+
+logs2 = ppo.update_parameters(exps)
+
+
+logs = {**logs1, **logs2}
+
+print(logs)
 
 
 
