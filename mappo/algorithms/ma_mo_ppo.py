@@ -14,6 +14,7 @@ class PPO(BaseAlgorithm):
         num_objectives,
         device=None, 
         num_frames_per_proc=None, 
+        chi = 1.0,
         discount=0.99, 
         lr=0.001, 
         gae_lambda=0.95,
@@ -33,7 +34,7 @@ class PPO(BaseAlgorithm):
         num_frames_per_proc = num_frames_per_proc or 128
 
         super().__init__(envs, acmodel, device, num_agents, num_objectives,
-            num_frames_per_proc, discount, lr, gae_lambda, entropy_coef,
+            num_frames_per_proc, chi, discount, lr, gae_lambda, entropy_coef,
             value_loss_coef, max_grad_norm, recurrence, preprocess_obss, mu, seed)
 
         self.clip_eps = clip_eps

@@ -1,19 +1,20 @@
 #from random import randint
 #from symbol import term
+#from turtle import pos
 #from MiniGrid.minigrid.minigrid_env import Goal
 from ltl_learning.ltl_operators import is_accomplished, progress
-from teamgrid.minigrid import COLOR_NAMES, COLORS, MiniGridEnv, Grid, Goal, Key, Ball, Lava
+from teamgrid.minigrid import COLOR_NAMES, COLORS, Box, MiniGridEnv, Grid, Goal, Key, Ball, Lava
 import numpy as np
 from gym import spaces
 import random as rnd
 
-class LTLSimpleMAEnv(MiniGridEnv):
+class LTL10TA5(MiniGridEnv):
     def __init__(self, debug=False, **kwargs):
-        room_size=6
-        self.debug = debug
-        self.num_agents = 2
-        self.m_tasks = 2
-        self.mu = np.array([[0.5, 0.5], [0.5, 0.5]])
+        self.debug=debug
+        room_size=12
+        self.num_agents = 5
+        self.m_tasks = 10
+        self.mu = np.full((self.num_agents, self.m_tasks), 1 / self.num_agents)
         self.observation_space = spaces.Box(
             low=0,
             high=255,
@@ -38,14 +39,22 @@ class LTLSimpleMAEnv(MiniGridEnv):
             #['A', ['E', 'b'], ['E', 'a']],
             #['A', ['G', ['N', 'c']], ['E', 'd']]
             ['E', 'a'],
-            ['E', 'b']
+            ['E', 'b'],
+            ['E', 'c'],
+            ['E', 'd'],
+            ['E', 'e'],
+            ['E', 'f'],
+            ['E', 'g'],
+            ['E', 'h'],
+            ['E', 'i'],
+            ['E', 'j'],
         ]
         #return tasks[randint(0, len(tasks) - 1)]
-        return rnd.sample(tasks, 2)
+        return rnd.sample(tasks, self.m_tasks)
 
     def encode_mission(self, mission):
         try:
-            syms = "AONGUXE[]abxy"
+            syms = "AONGUXE[]abcdefghij"
             V = {k: v+1 for v, k in enumerate(syms)}
             return [V[e] for e in mission if e not in ["\'", ",", " "]]    
         except Exception as e:
@@ -67,27 +76,57 @@ class LTLSimpleMAEnv(MiniGridEnv):
         self.grid.vert_wall(width - 1, 0)
 
         # Place the goal objects randomly
-        obj_key = Key('red')
-        pos_key = self.place_obj(obj_key)
+        obj_keya = Key('red')
+        pos_keya = self.place_obj(obj_keya)
 
-        obj_ball = Ball("blue")
-        pos_ball = self.place_obj(obj_ball)
+        obj_keyc = Key('green')
+        pos_keyc = self.place_obj(obj_keyc)
 
-        #goal1 = Goal()
-        #pos_goal1 = self.place_obj(goal1)
+        obj_keye = Key('yellow')
+        pos_keye = self.place_obj(obj_keye)
 
-        #goal2 = Goal()
-        #pos_goal2 = self.place_obj(goal2)
+        obj_keyg = Key('green')
+        pos_keyg = self.place_obj(obj_keyg)
+
+        obj_ballb = Ball("blue")
+        pos_ballb = self.place_obj(obj_ballb)
+
+        obj_balld = Ball("red")
+        pos_balld = self.place_obj(obj_balld)
+
+        obj_ballf = Ball("yellow")
+        pos_ballf = self.place_obj(obj_ballf)
+
+        obj_ballh = Ball("green")
+        pos_ballh = self.place_obj(obj_ballh)
+
+        obj_boxi = Box("purple")
+        pos_boxi = self.place_obj(obj_boxi)
+
+        obj_boxj = Box("blue")
+        pos_boxj = self.place_obj(obj_boxj)
+        
+        #goali = Goal()
+        #pos_goali = self.place_obj(goali)
+
+        #goalj = Goal()
+        #pos_goalj = self.place_obj(goalj)
 
         for _ in range(self.num_agents):
             self.place_agent()
         #self.obj = obj
         # LTL objects 
         self.event_objects = [
-            (obj_key, pos_key, "a"), 
-            (obj_ball, pos_ball, "b"),
-            #(goal1, pos_goal1, "x"),
-            #(goal2, pos_goal2, "y")    
+            (obj_keya, pos_keya, "a"), 
+            (obj_ballb, pos_ballb, "b"),
+            (obj_keyc, pos_keyc, "c"), 
+            (obj_balld, pos_balld, "d"),  
+            (obj_keye, pos_keye, "e"), 
+            (obj_ballf, pos_ballf, "f"),  
+            (obj_keyg, pos_keyg, "g"), 
+            (obj_ballh, pos_ballh, "h"),
+            (obj_boxi, pos_boxi, "i"), 
+            (obj_boxj, pos_boxj, "j"),
         ]
         #self.mission = "Do the LTL mission"
 
@@ -168,7 +207,7 @@ class LTLSimpleMAEnv(MiniGridEnv):
                 return (1, True)
             else:
                 return (0, True)
-        elif self.task[task] == "False": 
+        elif self.task[agent][task] == "False": 
             if not self.finished_tasks[agent][task]:
                 self.finished_tasks[agent][task] = True
                 self.finished_mission[task] = True
@@ -226,6 +265,9 @@ class LTLSimpleMAEnv(MiniGridEnv):
         reward = self.mission_reward(reward, terminated_)
         terminated = [terminated_] * self.num_agents
         truncated_ = [truncated] * self.num_agents
+
+        if self.debug:
+            print(self.finished_mission)
 
         return obs, reward, terminated, truncated_, info
 

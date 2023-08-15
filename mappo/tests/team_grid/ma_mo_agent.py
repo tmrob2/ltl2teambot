@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from mappo.networks.mo_ma_ltlnet import AC_MA_MO_LTL_Model
+from mappo.networks.mo_ma_ltlnet_deep import AC_MA_MO_LTL_Model as DeepModel
 
 class Agent:
 
@@ -13,11 +14,14 @@ class Agent:
         argmax=False, 
         num_envs=1,
         use_memory=False,
-        preprocess_obs=None
+        preprocess_obs=None,
+        deep_model=False
         ) -> None:
         
         self.preprocess_obs = preprocess_obs if preprocess_obs is not None else self.default_preprocess_obss
-        self.model = AC_MA_MO_LTL_Model(action_space, num_tasks, use_memory=use_memory)
+        self.model = DeepModel(action_space, num_tasks, use_memory=use_memory) if deep_model else \
+            AC_MA_MO_LTL_Model(action_space, num_tasks, use_memory=use_memory)
+            
         self.model.load_models()
         
         self.device = device

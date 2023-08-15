@@ -80,7 +80,7 @@ class ParallelEnv(gym.Env):
 
 
 def make_env(env_key, seed=None):
-    env = gym.make(env_key, disable_env_checker=True)
+    env = gym.make(env_key)
     if seed:
         env.seed(seed)
     env.reset()

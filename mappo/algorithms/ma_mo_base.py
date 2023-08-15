@@ -13,6 +13,7 @@ class BaseAlgorithm:
         num_agents,
         num_objectives,
         num_frames_per_proc, 
+        chi,
         discount, 
         lr, 
         gae_lambda, 
@@ -77,6 +78,7 @@ class BaseAlgorithm:
         self.recurrence = recurrence
         self.preprocess_obss = preprocess_obss if preprocess_obss is not None else self.default_preprocess_obss
         self.reshape_reward = None
+        self.chi = chi
 
         assert self.num_frames_per_proc % self.recurrence == 0
 
@@ -113,7 +115,7 @@ class BaseAlgorithm:
 
         self.log_done_counter = [0] * self.num_agents 
         #self.log_total_done_counter = 0
-        self.log_return = [[np.zeros(3)] * self.num_procs for _ in range(self.num_agents)]
+        self.log_return = [[np.zeros(self.num_objectives)] * self.num_procs for _ in range(self.num_agents)]
         #self.log_reshaped_return = [[] for _ in range(self.num_agents)]
         self.log_num_frames = [0] * self.num_procs * self.num_agents
     
@@ -350,25 +352,41 @@ class BaseAlgorithm:
         # todo need to loop over each environment
         _, _, y = X.shape
         H_ = [] 
-        H_.append(2.0 * self.df(X[:, agent, 0], c))
+        #H_2 =[] 
+        H_.append(self.chi * self.df(X[:, agent, 0], c))
+        #H_2.append(self.df(X[:, agent, 0], c))
         for j in range(1, y):
             #print(X[:, k, j - 1])
-            H_.append(
-                self.dh(torch.sum(mu[:, j - 1].unsqueeze(1) * X.transpose(1, 0)[:, :, j], dim=0), e) \
-                    * mu[agent, j - 1]
-            )
+            acc = []
+            for i in range(self.num_agents):
+                acc.append(self.dh(mu[i, j - 1] * X[:, i, j], e))
+            H_.append(torch.sum(torch.stack(acc, 1), 1) * mu[agent, j - 1])
+            #H_2.append(
+            #    self.dh(torch.sum(mu[:, j - 1].unsqueeze(1) * X.transpose(1, 0)[:, :, j], dim=0), e) \
+            #        * mu[agent, j - 1]
+            #)
 
         H = torch.stack(H_, 1)
+        #H2 = torch.stack(H_2, 1)
         return H
 
 def compute_alloc_loss(X, mu, e):
-    _, _, y = X.shape
+    _, num_agents, y = X.shape
     loss = 0.
     for j in range(1, y):
         with torch.no_grad():
-            h = dh(torch.sum(mu[:, j - 1].unsqueeze(1) * X.transpose(1, 0)[:, :, j], dim=0), e)
-        kappa_component = torch.sum(mu[:, j - 1].unsqueeze(1) * X.transpose(1, 0)[:, :, j], dim=0)
-        loss += torch.matmul(h, kappa_component)
+            acc = []
+            for i in range(num_agents):
+                acc.append(dh(mu[i, j - 1] * X[:, i, j], e))
+            h = torch.sum(torch.stack(acc, 1), 1)
+            #h = dh(torch.sum(mu[:, j - 1].unsqueeze(1) * X.transpose(1, 0)[:, :, j], dim=0), e)
+        acc = []
+        for i in range(num_agents):
+            mu_ = mu[i, j - 1] * X[:, i, j]
+            acc.append(mu_)
+        kappa_component = torch.sum(torch.stack(acc, 1), 1)
+        #kappa_component = torch.sum(mu[:, j - 1].unsqueeze(1) * X.transpose(1, 0)[:, :, j], dim=0)
+        loss += torch.mean(h * kappa_component)
     return loss
 
 def dh(x, e):

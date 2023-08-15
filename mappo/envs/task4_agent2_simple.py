@@ -7,13 +7,12 @@ import numpy as np
 from gym import spaces
 import random as rnd
 
-class LTLSimpleMAEnv(MiniGridEnv):
-    def __init__(self, debug=False, **kwargs):
-        room_size=6
-        self.debug = debug
+class LTL4TA2(MiniGridEnv):
+    def __init__(self,**kwargs):
+        room_size=12
         self.num_agents = 2
-        self.m_tasks = 2
-        self.mu = np.array([[0.5, 0.5], [0.5, 0.5]])
+        self.m_tasks = 4
+        self.mu = np.full((self.num_agents, self.m_tasks), 1 / self.num_agents)
         self.observation_space = spaces.Box(
             low=0,
             high=255,
@@ -38,14 +37,16 @@ class LTLSimpleMAEnv(MiniGridEnv):
             #['A', ['E', 'b'], ['E', 'a']],
             #['A', ['G', ['N', 'c']], ['E', 'd']]
             ['E', 'a'],
-            ['E', 'b']
+            ['E', 'b'],
+            ['E', 'c'],
+            ['E', 'd']
         ]
         #return tasks[randint(0, len(tasks) - 1)]
-        return rnd.sample(tasks, 2)
+        return rnd.sample(tasks, self.m_tasks)
 
     def encode_mission(self, mission):
         try:
-            syms = "AONGUXE[]abxy"
+            syms = "AONGUXE[]abcd"
             V = {k: v+1 for v, k in enumerate(syms)}
             return [V[e] for e in mission if e not in ["\'", ",", " "]]    
         except Exception as e:
@@ -67,11 +68,17 @@ class LTLSimpleMAEnv(MiniGridEnv):
         self.grid.vert_wall(width - 1, 0)
 
         # Place the goal objects randomly
-        obj_key = Key('red')
-        pos_key = self.place_obj(obj_key)
+        obj_keya = Key('red')
+        pos_keya = self.place_obj(obj_keya)
 
-        obj_ball = Ball("blue")
-        pos_ball = self.place_obj(obj_ball)
+        obj_keyc = Key('green')
+        pos_keyc = self.place_obj(obj_keyc)
+
+        obj_ballb = Ball("blue")
+        pos_ballb = self.place_obj(obj_ballb)
+
+        obj_balld = Ball("red")
+        pos_balld = self.place_obj(obj_balld)
 
         #goal1 = Goal()
         #pos_goal1 = self.place_obj(goal1)
@@ -84,10 +91,10 @@ class LTLSimpleMAEnv(MiniGridEnv):
         #self.obj = obj
         # LTL objects 
         self.event_objects = [
-            (obj_key, pos_key, "a"), 
-            (obj_ball, pos_ball, "b"),
-            #(goal1, pos_goal1, "x"),
-            #(goal2, pos_goal2, "y")    
+            (obj_keya, pos_keya, "a"), 
+            (obj_ballb, pos_ballb, "b"),
+            (obj_keyc, pos_keyc, "c"), 
+            (obj_balld, pos_balld, "d"),  
         ]
         #self.mission = "Do the LTL mission"
 
@@ -168,7 +175,7 @@ class LTLSimpleMAEnv(MiniGridEnv):
                 return (1, True)
             else:
                 return (0, True)
-        elif self.task[task] == "False": 
+        elif self.task[agent][task] == "False": 
             if not self.finished_tasks[agent][task]:
                 self.finished_tasks[agent][task] = True
                 self.finished_mission[task] = True

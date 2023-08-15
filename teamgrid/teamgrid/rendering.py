@@ -194,7 +194,7 @@ class Renderer:
         self.painter.drawLine(x0, y0, x1, y1)
 
     def drawCircle(self, x, y, r):
-        center = QPoint(x, y)
+        center = QPoint(int(x), int(y))
         self.painter.drawEllipse(center, r, r)
 
     def drawPolygon(self, points):

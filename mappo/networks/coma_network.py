@@ -46,7 +46,7 @@ class EpisodeMemory:
     def clear(self):
         self.observations = []
         self.actions = []
-        self.pi = []
+        self.pi = [[] for _ in range(self.num_agents)]
         self.reward = []
         self.done = []
         self.trunc = []
@@ -250,9 +250,9 @@ class COMA:
             num_tasks, 
             env, 
             device=None,
-            lr_a = 0.001, 
-            lr_c = 0.001,
-            gamma = 0.95,
+            lr_a = 0.00004, 
+            lr_c = 0.0001,
+            gamma = 0.99,
             target_update_steps=10
         ):
         self.num_agents = num_agents
@@ -304,9 +304,8 @@ class COMA:
         return actions
 
     def collect_episode_trajectory(self, seed=None):
-        episode_done = False
         obs, _ = self.reset(seed)
-        while not episode_done:
+        while True:
             #pi, actions, memory = self.act(obs)
             actions = self.act(obs)
 
@@ -371,6 +370,10 @@ class COMA:
             observations, len(observations), observations[0].shape[1]
         )
         ini_values = self.get_ini_values(observations, actions, pi).detach()
+
+        actor_losses = []
+        value_losses = []
+
         for agent in range(self.num_agents):
             H = self.computeH(ini_values, mu, agent, c, e)
             ids = (torch.ones(batch_size, device=self.device) * agent).view(-1, 1)
@@ -391,9 +394,11 @@ class COMA:
 
             actor_loss = -torch.mean(log_pi * mod_advantage)
 
+            actor_losses.append(actor_loss.item())
+
             self.actor_optimisers[agent].zero_grad()
             actor_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.agents[agent].parameters(), 5)
+            torch.nn.utils.clip_grad_norm_(self.agents[agent].parameters(), 0.5)
             self.actor_optimisers[agent].step()
 
             ########################
@@ -416,12 +421,14 @@ class COMA:
                 else:
                     r[t] = rewards[t][agent] + self.gamma * Q_taken_target[t + 1]
 
-            critic_loss = torch.mean((r - Q_taken) ** 2)
+            critic_loss = 100 * torch.mean((r - Q_taken) ** 2)
+
 
             self.critic_optimiser.zero_grad()
             critic_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 5)
+            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 0.5)
             self.critic_optimiser.step()
+            value_losses.append(critic_loss.item())
 
         if self.count_steps == self.target_update_steps:
             self.critic_target.load_state_dict(self.critic.state_dict())
@@ -430,6 +437,8 @@ class COMA:
             self.count_steps += 1
         
         self.episode_memory.clear()
+        output_rewards = np.sum(rewards.cpu().numpy(), 0)
+        return output_rewards, actor_losses, critic_loss
 
 
 

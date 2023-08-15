@@ -3,13 +3,12 @@ from gym import register
 import gym
 import numpy as np
 import torch
+from mappo.utils.storage import truncate, get_txt_logger
 
 register(
     'MA-LTL-Empty-v0', 
     entry_point='mappo.envs:LTLSimpleMAEnv',
 )
-
-torch.autograd.set_detect_anomaly(True)
 
 print(
 """
@@ -129,5 +128,24 @@ TEST: Test one COMA training step\n
 ---------------------------------------\n
 """
 )
+episode = 0
+frames = 0
+rewards, aloss, closs = coma.train(mu.detach(), c, e)
 
-coma.train(mu.detach(), c, e)
+txt_logger = get_txt_logger()
+
+#print("rewards", rewards)
+#print("aloss", aloss)
+#print("closs", closs)
+
+headers = ["episode", "duration"]
+data = [episode, coma.frames]
+headers += ["rewards"]
+data += [[list(map(lambda n: truncate(n, 3), x)) for x in rewards]]
+headers += ["actor loss"]
+data += [list(map(lambda n: truncate(n, 3), aloss))]
+headers += ["critic loss"]
+data += [closs]
+
+
+txt_logger.info("U {} | F {:06} | R:μ {} | pL {} | C {:.3F}".format(*data))
