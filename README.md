@@ -65,7 +65,7 @@
 This framework supports multiagent reinforcment learning in enormous or unknown environments.
 The key idea of this framework is using a shared parameter network for the learning phase
 and then each agent executes its own policy. This is the so-called Centralised Training Decentralised Execution (CTDE) paradigm. 
-This framework implements deterministic task allocation to cooperative robot teams, and parameterises the task allocation space for agents, updates the allocation parameters using a policy gradient approach. Parameterising the task allocation space is a unique way of scalarising the the multi-objective problem specifically in terms of task allocation.
+This framework implements deterministic task allocation to cooperative robot teams, and parameterises the task allocation space for agents, updating the allocation parameters using a policy gradient approach. Parameterising the task allocation space is a unique way of scalarising the the multi-objective problem specifically in terms of task allocation.
 
 <!-- INSTALLATION -->
 ## Installation
