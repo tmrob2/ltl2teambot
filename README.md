@@ -147,14 +147,11 @@ Memory LSTM (if use_memory=True)         LSTM LTL Embedding
 Embedding: embedding
    |
    v
+Composed Features: composed_x    ------------|                 
+   |                                         |
+   v                                         v
+Actor Network: logits for actions            Critic Network: critic values
 
-Composed Features: composed_x
-   |
-   v
-Actor Network: logits for actions
-   |
-   v
-Critic Network: Multi-objective value estimation
 ```
 
 The algorithm for training utilises a novel multiagent multi-objective Proximal Policy Optimisation algorithm which uses mini-batch. In the multiagent version of PPO the idea is to share the parameters of the policy so that each agent directly learns from the trajectories of all other agents.  
