@@ -19,7 +19,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-<h3 align="center">Team PACTS</h3>
+<h3 align="center">LTL2TeamBot</h3>
 
   <p align="center">
     Team Planning and Allocation of Continuous Task Streams (PACTS) is a multi-agent framework for continuous task allocation and planning.
