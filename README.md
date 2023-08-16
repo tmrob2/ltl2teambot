@@ -22,7 +22,7 @@
 <h3 align="center">LTL2TeamBot</h3>
 
   <p align="center">
-    Team Planning and Allocation of Continuous Task Streams (PACTS) is a multi-agent framework for continuous task allocation and planning.
+    Framework to support LTL task allocation to a team of cooperative robots acting under multiple objectives.
     <br />
     <a href="https://github.com/tmrob2/ltl2teambot"><strong>Explore the docs »</strong></a>
     <br />
