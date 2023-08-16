@@ -157,7 +157,7 @@ Actor Network: logits for actions
 Critic Network: Multi-objective value estimation
 ```
 
-The algorithm for training utilises a novel multiagent multi-objective Proximal Policy Optimisation algorithm which uses mini-batch. In the multiagent version of PPO the idea is to share the 
+The algorithm for training utilises a novel multiagent multi-objective Proximal Policy Optimisation algorithm which uses mini-batch. In the multiagent version of PPO the idea is to share the parameters of the policy so that each agent directly learns from the trajectories of all other agents.  
 
 <!-- TRAINING -->
 ## Training
@@ -173,7 +173,9 @@ The following steps are followed:
 5. Initialise the PPO algorithm and parameters.
 6. While the frames is less than the number of total frames and the best score for each objective is less than some threshold, collect experiences for each agent and update $\kappa, \theta$.
     - The loss function is based on both parameters:
+
     $$\mathcal{J}^{\nu, \mu} = \sum_{i \in I} \lambda_i \mathtt{f}_{c_i}(v^{i}_{\mu,0}) + \sum_{j\in J}\mathtt{h}_{e_j}(v^{\nu(j),j}_{\mu,0}) $$
+
     where the first term manages the cost of each agent $i$ performing tasks while the second term manages the probability of completion for each task $j$.
 7. Print the outputs of the training and save models based on high-performing outputs.
 
