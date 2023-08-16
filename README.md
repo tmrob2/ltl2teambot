@@ -174,7 +174,7 @@ The following steps are followed:
 6. While the frames is less than the number of total frames and the best score for each objective is less than some threshold, collect experiences for each agent and update $\kappa, \theta$.
     - The loss function is based on both parameters:
 
-    $$\mathcal{J}^{\nu, \mu} = \sum_{i \in I} \lambda_i \mathtt{f}_{c_i}(v^{i}_{\mu,0}) + \sum_{j\in J}\mathtt{h}_{e_j}(v^{\nu(j),j}_{\mu,0}) $$
+    $\mathcal{J}^{\nu, \mu} = \sum_{i \in I} \lambda_i \mathtt{f}_{c_i}(v^{i}_{\mu,0}) + \sum_{j\in J}\mathtt{h}_{e_j}(v^{\nu(j),j}_{\mu,0}) $
 
     where the first term manages the cost of each agent $i$ performing tasks while the second term manages the probability of completion for each task $j$.
 7. Print the outputs of the training and save models based on high-performing outputs.
