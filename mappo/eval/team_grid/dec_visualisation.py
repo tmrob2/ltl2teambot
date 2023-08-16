@@ -1,4 +1,4 @@
-from mappo.tests.team_grid.ma_mo_agent import Agent
+from mappo.eval.team_grid.ma_mo_agent import Agent
 import teamgrid
 import gym # the gym environment has moved to gymnasium for minigrid
 from gym import register

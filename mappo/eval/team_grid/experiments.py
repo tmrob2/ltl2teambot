@@ -15,7 +15,7 @@ import numpy as np
 np.random.seed(1234)
 
 register(
-    'LTLA2T2-v0', 
+    'LTLA2T4-v0', 
     entry_point='mappo.envs:LTLSimpleMAEnv',
 )
 
@@ -26,7 +26,7 @@ register(
 
 # construct a set of environments
 
-writer = SummaryWriter("runs/A2T2")
+writer = SummaryWriter("runs/A2T4")
 
 # TODO introduce some args to continue training a model
 
@@ -41,7 +41,7 @@ seed = 1234
 
 envs = []
 for i in range(num_procs):
-    envs.append(make_env("LTLA2T2-v0", seed))
+    envs.append(make_env("LTLA2T4-v0", seed))
 
 
 lr = 0.001

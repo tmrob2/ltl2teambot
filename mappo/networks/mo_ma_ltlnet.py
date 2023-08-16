@@ -7,7 +7,6 @@ from torch.distributions.categorical import Categorical
 from mappo.minigrid_copy.utils.base_model import RecurrentACModel
 from copy import deepcopy
 
-
 # Function from https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/blob/master/model.py
 def init_params(m):
     classname = m.__class__.__name__
@@ -136,3 +135,4 @@ class AC_MA_MO_LTL_Model(nn.Module, RecurrentACModel):
     def load_models(self):
         print('... loading models ...')
         self.load_state_dict(torch.load(self.checkpoint_file))
+        

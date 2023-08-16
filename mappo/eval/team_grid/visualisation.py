@@ -5,6 +5,8 @@ from gym import register
 import numpy as np
 import torch
 import time
+import os
+
 
 #register(
 #    'MA-LTL-Empty-v0', 
@@ -21,10 +23,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #)
 
 register(
-    'LTL4TA2-v0', 
-    entry_point='mappo.envs:LTL4TA2',
+    'LTLA2T4-v0', 
+    entry_point='mappo.envs:LTLSimpleMAEnv',
 )
-
 
 kappa = torch.ones(num_agents, num_tasks, device=device, dtype=torch.float)
 #mu = torch.tensor(np.array([[1., 0.], [0., 1.]]), device=device, dtype=torch.float)
@@ -35,7 +36,7 @@ alloc_layer = torch.nn.Softmax(dim=0)
 mu = alloc_layer(kappa)
 
 # create a simple empty partially observable 8x8 grid
-env = gym.make("LTL4TA2-v0")
+env = gym.make("LTLA2T4-v0")
 seed = 1234
 
 # load the ppo model
