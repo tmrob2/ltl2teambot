@@ -173,8 +173,7 @@ The following steps are followed:
 5. Initialise the PPO algorithm and parameters.
 6. While the frames is less than the number of total frames and the best score for each objective is less than some threshold, collect experiences for each agent and update $\kappa, \theta$.
     - The loss function is based on both parameters:
-
-    $\mathcal{J}^{\nu, \mu} = \sum_{i \in I} \lambda_i \mathtt{f}_{c_i}(v^{i}_{\mu,0}) + \sum_{j\in J}\mathtt{h}_{e_j}(v^{\nu(j),j}_{\mu,0}) $
+   <img src="http://www.sciweavers.org/tex2img.php?eq=%24%5Cmathcal%7BJ%7D%5E%7B%5Cnu%2C%20%5Cmu%7D%20%3D%20%5Csum_%7Bi%20%5Cin%20I%7D%20%5Clambda_i%20%5Cmathtt%7Bf%7D_%7Bc_i%7D%28v%5E%7Bi%7D_%7B%5Cmu%2C0%7D%29%20%2B%20%5Csum_%7Bj%5Cin%20J%7D%5Cmathtt%7Bh%7D_%7Be_j%7D%28v%5E%7B%5Cnu%28j%29%2Cj%7D_%7B%5Cmu%2C0%7D%29%24&bc=White&fc=Black&im=jpg&fs=12&ff=arev&edit=0" align="center" border="0" alt="$\mathcal{J}^{\nu, \mu} = \sum_{i \in I} \lambda_i \mathtt{f}_{c_i}(v^{i}_{\mu,0}) + \sum_{j\in J}\mathtt{h}_{e_j}(v^{\nu(j),j}_{\mu,0})$" width="308" height="32" />
 
     where the first term manages the cost of each agent $i$ performing tasks while the second term manages the probability of completion for each task $j$.
 7. Print the outputs of the training and save models based on high-performing outputs.
