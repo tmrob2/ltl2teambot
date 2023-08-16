@@ -187,7 +187,7 @@ python mappo/eval/team_grid/dec_visualisation.py
 
 An example of the simple training environment can be seen below. 
 
-![Simple-Example](small-ex.gif)
+![Simple-Example](ltl2teambot/small-ex.gif)
 
 <!-- DATA AND RESULTS -->
 ## Data and Results
